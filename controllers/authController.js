@@ -103,6 +103,11 @@ const loginUser = async (req, res) => {
       return res.status(401).json({ message: 'Невірний email або пароль' });
     }
 
+    if (user.authProvider !== 'local') {
+      user.authProvider = 'local';
+      await user.save();
+    }
+
     const token = jwt.sign(
       { id: user._id, email: user.email }, 
       process.env.JWT_SECRET || 'fallback_secret_key', 
@@ -116,7 +121,8 @@ const loginUser = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        status: user.status
+        status: user.status,
+        authProvider: user.authProvider || 'local'
       }
     });
   } catch (error) {
