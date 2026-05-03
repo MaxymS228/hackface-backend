@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
@@ -15,13 +16,15 @@ const authRoutes = require('./routes/authRoutes');
 app.use('/api', authRoutes); 
 const projectRoutes = require('./routes/projectRoutes');
 app.use('/api', projectRoutes);
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 const hackathonRoutes = require('./routes/hackathonRoutes');
 app.use('/api', hackathonRoutes);
 const teamRoutes = require('./routes/teamRoutes');
 app.use('/api', teamRoutes);
 const dashboardRoutes = require('./routes/dashboardRoutes');
 app.use('/api/dashboard', dashboardRoutes);
+const userRoutes = require('./routes/userRoutes');
+app.use('/api/users', userRoutes);
 
 
 // Routes

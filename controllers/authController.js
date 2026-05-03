@@ -152,6 +152,7 @@ const googleAuth = async (req, res) => {
         email: email,
         password: hashedPassword,
         status: 'Active',
+        authProvider: 'google',
       });
 
       await user.save();
@@ -164,6 +165,10 @@ const googleAuth = async (req, res) => {
         user.verificationToken = undefined;
         await user.save();
       }
+      if (user.authProvider !== 'google') {
+        user.authProvider = 'google';
+      }
+      await user.save();
     }
 
     const jwtToken = jwt.sign(
@@ -179,7 +184,8 @@ const googleAuth = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        status: user.status
+        status: user.status,
+        authProvider: user.authProvider || 'google'
       }
     });
 
@@ -190,68 +196,3 @@ const googleAuth = async (req, res) => {
 };
 
 module.exports = { registerUser, loginUser, verifyEmail, googleAuth };
-
-// const User = require('../models/User');
-// const bcrypt = require('bcrypt');
-
-// const registerUser = async (req, res) => {
-//   const { name, email, password, role } = req.body;
-
-//   try {
-//     const existingUser = await User.findOne({ email });
-//     if (existingUser) {
-//       return res.status(400).json({ message: 'Користувач з таким email вже існує' });
-//     }
-
-//     const hashedPassword = await bcrypt.hash(password, 10);
-
-//     const newUser = new User({
-//       name,
-//       email,
-//       password: hashedPassword,
-//       role,
-//     });
-
-//     await newUser.save();
-//     res.status(201).json({ message: 'Користувач успішно зареєстрований' });
-//   } catch (error) {
-//     console.error('Помилка реєстрації:', error);
-//     res.status(500).json({ message: 'Помилка сервера' });
-//   }
-// };
-
-// //////////////////////////////
-
-// const loginUser = async (req, res) => {
-//   const { email, password } = req.body;
-
-//   try {
-//     // Знайти користувача за email
-//     const user = await User.findOne({ email });
-//     if (!user) {
-//       return res.status(401).json({ message: 'Невірний email або пароль' });
-//     }
-
-//     // Перевірити пароль
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) {
-//       return res.status(401).json({ message: 'Невірний email або пароль' });
-//     }
-
-//     // Повернути успішну відповідь
-//     res.status(200).json({
-//       message: 'Вхід успішний',
-//       user: {
-//         id: user._id,
-//         name: user.name,
-//         email: user.email,
-//         role: user.role,
-//       }
-//     });
-//   } catch (error) {
-//     console.error('Помилка логіну:', error);
-//     res.status(500).json({ message: 'Помилка сервера' });
-//   }
-// };
-
-// module.exports = { registerUser, loginUser };

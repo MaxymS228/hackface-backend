@@ -4,11 +4,13 @@ const Project = require('../models/Project');
 
 exports.getDashboardSummary = async (req, res) => {
   try {
-    // ID користувача братимемо з параметрів (або пізніше з JWT токена)
-    const { userId } = req.params;
+    const userId = req.userId; 
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Не авторизовано' });
+    }
 
     // 1. Шукаємо всі хакатони, де користувач є учасником/суддею/організатором
-    // Використовуємо .populate(), щоб одразу витягнути деталі хакатону, а не тільки його ID
     const hackathonRoles = await HackathonMember.find({ userId }).populate('hackathonId');
 
     // 2. Шукаємо всі команди, в яких є користувач
