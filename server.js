@@ -12,17 +12,26 @@ require('events').EventEmitter.defaultMaxListeners = 20;
 app.use(cors());
 app.use(express.json());
 
+//Добре
 const authRoutes = require('./routes/authRoutes');
 app.use('/api', authRoutes); 
+
 const projectRoutes = require('./routes/projectRoutes');
 app.use('/api', projectRoutes);
+//Добре
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 const hackathonRoutes = require('./routes/hackathonRoutes');
-app.use('/api', hackathonRoutes);
+app.use('/api/hackathons', hackathonRoutes);
+
 const teamRoutes = require('./routes/teamRoutes');
 app.use('/api', teamRoutes);
+
+//Добре
 const dashboardRoutes = require('./routes/dashboardRoutes');
 app.use('/api/dashboard', dashboardRoutes);
+
+//Добре
 const userRoutes = require('./routes/userRoutes');
 app.use('/api/users', userRoutes);
 

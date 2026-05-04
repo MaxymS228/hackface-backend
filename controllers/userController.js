@@ -1,8 +1,28 @@
 const mongoose = require('mongoose');
-const fs = require('fs');
-const path = require('path');
+const cloudinary = require('cloudinary').v2;
+//const fs = require('fs');
+//const path = require('path');
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
+
+// Допоміжна функція для видалення файлів з Cloudinary
+const deleteOldImageFromCloudinary = async (imageUrl) => {
+  if (!imageUrl || !imageUrl.includes('cloudinary.com')) return;
+  
+  try {
+    const publicId = imageUrl.substring(
+      imageUrl.indexOf('uploads/'), 
+      imageUrl.lastIndexOf('.')
+    );
+    
+    if (publicId) {
+      await cloudinary.uploader.destroy(publicId);
+      console.log(`Старий файл успішно видалено з Cloudinary: ${publicId}`);
+    }
+  } catch (err) {
+    console.error('Помилка при видаленні старого файлу з Cloudinary:', err);
+  }
+};
 
 // 1. Отримання власних даних (для сторінки Налаштувань)
 exports.getCurrentUser = async (req, res) => {
@@ -49,37 +69,50 @@ exports.updateProfile = async (req, res) => {
       }
     }
 
-    const deleteOldImage = (imageUrl) => {
-      if (!imageUrl) return;
-      
-      try {
-        const filename = imageUrl.split('/uploads/')[1]; 
-        
-        if (filename) {
-          const filePath = path.join(__dirname, '../uploads', filename);
-          
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-            console.log(`Старий файл видалено: ${filename}`);
-          }
-        }
-      } catch (err) {
-        console.error('Помилка при видаленні старого файлу:', err);
-      }
-    };
-
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-
     if (req.files) {
       if (req.files.avatar) {
-        deleteOldImage(user.avatar);
-        user.avatar = `${baseUrl}/uploads/${req.files.avatar[0].filename}`;
+        // Видаляємо стару аватарку перед збереженням нової
+        await deleteOldImageFromCloudinary(user.avatar);
+        // Зберігаємо нове посилання, яке нам повернув Cloudinary через Multer
+        user.avatar = req.files.avatar[0].path; 
       }
       if (req.files.banner) {
-        deleteOldImage(user.banner);
-        user.banner = `${baseUrl}/uploads/${req.files.banner[0].filename}`;
+        // Видаляємо старий банер
+        await deleteOldImageFromCloudinary(user.banner);
+        user.banner = req.files.banner[0].path;
       }
     }
+    // const deleteOldImage = (imageUrl) => {
+    //   if (!imageUrl) return;
+      
+    //   try {
+    //     const filename = imageUrl.split('/uploads/')[1]; 
+        
+    //     if (filename) {
+    //       const filePath = path.join(__dirname, '../uploads', filename);
+          
+    //       if (fs.existsSync(filePath)) {
+    //         fs.unlinkSync(filePath);
+    //         console.log(`Старий файл видалено: ${filename}`);
+    //       }
+    //     }
+    //   } catch (err) {
+    //     console.error('Помилка при видаленні старого файлу:', err);
+    //   }
+    // };
+
+    // const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+    // if (req.files) {
+    //   if (req.files.avatar) {
+    //     deleteOldImage(user.avatar);
+    //     user.avatar = `${baseUrl}/uploads/${req.files.avatar[0].filename}`;
+    //   }
+    //   if (req.files.banner) {
+    //     deleteOldImage(user.banner);
+    //     user.banner = `${baseUrl}/uploads/${req.files.banner[0].filename}`;
+    //   }
+    // }
 
     await user.save();
 
