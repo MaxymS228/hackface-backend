@@ -116,7 +116,7 @@ exports.updateHackathon = async (req, res) => {
     if (endDate) hackathon.endDate = endDate;
     if (registrationDeadline) hackathon.registrationDeadline = registrationDeadline;
     if (format) hackathon.format = format;
-    if (location !== undefined) hackathon.location = location; 
+    if (hackathon.format === 'Online') { hackathon.location = ''; } else if (location !== undefined) { hackathon.location = location; }
     if (prizes !== undefined) hackathon.prizes = prizes;
     if (status) hackathon.status = status;
 
