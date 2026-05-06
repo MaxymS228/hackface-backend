@@ -22,6 +22,9 @@ router.post('/:id/join', authMiddleware, hackathonController.joinHackathon);
 // Залишення та видалення користувача з хакатону
 router.delete('/:id/leave', authMiddleware, hackathonController.leaveHackathon);
 
+// Видалення учасника організатором
+router.delete('/:id/members/:userId', authMiddleware, hackathonController.removeParticipant);
+
 module.exports = router;
 
 // const express = require('express');

@@ -159,15 +159,17 @@ exports.getHackathonById = async (req, res) => {
     // Шукаємо всіх учасників
     const teamMembers = await HackathonMember.find({
       hackathonId: id
-    }).populate('userId', 'name avatarUrl specialization');
+    }).populate('userId', 'name email avatarUrl specialization ');
 
     // Форматуємо дані під наш фронтенд дизайн
     const members = teamMembers.map(member => ({
       _id: member._id,
       role: member.role,
+      joinedAt: member.joinDate,
       user: {
         _id: member.userId._id,
         name: member.userId.name,
+        email: member.userId.email,
         avatarUrl: member.userId.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.userId.name)}&background=6366f1&color=fff&size=128`
       }
     }));
@@ -290,5 +292,27 @@ exports.leaveHackathon = async (req, res) => {
   } catch (error) {
     console.error('Помилка виходу з хакатону:', error);
     res.status(500).json({ message: 'Помилка сервера при скасуванні участі' });
+  }
+};
+
+// 7. Видалення учасника організатором
+exports.removeParticipant = async (req, res) => {
+  try {
+    const { id, userId } = req.params;
+
+    // Знаходимо і видаляємо запис з HackathonMember
+    const deletedMember = await HackathonMember.findOneAndDelete({
+      hackathonId: id,
+      userId: userId
+    });
+
+    if (!deletedMember) {
+      return res.status(404).json({ message: 'Учасника не знайдено на цьому хакатоні' });
+    }
+
+    res.status(200).json({ message: 'Учасника успішно видалено' });
+  } catch (error) {
+    console.error('Помилка видалення учасника:', error);
+    res.status(500).json({ message: 'Помилка сервера при видаленні учасника' });
   }
 };
