@@ -37,6 +37,12 @@ router.post('/:id/invite', authMiddleware, hackathonController.inviteToHackathon
 // Роут для видалення членів команди
 router.delete('/:id/members/:memberId', authMiddleware, hackathonController.removeMemberHackathon);
 
+// Роут для отримання аналітики хакатону
+router.get('/:id/analytics', authMiddleware, hackathonController.getHackathonAnalytics);
+
+// Роут для оновлення кількісті переглядів хакатону
+router.post('/:id/view', hackathonController.incrementViews);
+
 module.exports = router;
 
 // const express = require('express');

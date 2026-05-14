@@ -1,5 +1,6 @@
 const Hackathon = require('../models/Hackathon');
 const HackathonMember = require('../models/HackathonMember');
+const Team = require('../models/Team');
 const User = require('../models/User');
 const nodemailer = require('nodemailer');
 const cloudinary = require('cloudinary').v2; 
@@ -459,17 +460,17 @@ exports.removeMemberHackathon = async (req, res) => {
     const isMainOrganizer = hackathon.organizerId.toString() === req.userId;
 
     // Логіка прав:
-    // 1. Основного організатора ніхто не може видалити
+    // Основного організатора ніхто не може видалити
     if (hackathon.organizerId.toString() === target.userId?.toString()) {
       return res.status(403).json({ message: 'Не можна видалити головного організатора' });
     }
 
-    // 2. Тільки головний організатор може видаляти інших Organizer/Co-organizer
+    // Тільки головний організатор може видаляти інших Organizer/Co-organizer
     if ((target.role === 'Organizer' || target.role === 'Co-organizer') && !isMainOrganizer) {
       return res.status(403).json({ message: 'Тільки головний організатор може видаляти організаторів' });
     }
 
-    // 3. Звичайний організатор може видаляти лише Jury/Mentor
+    // Звичайний організатор може видаляти лише Jury/Mentor
     if (!isMainOrganizer && requester.role !== 'Organizer') {
       return res.status(403).json({ message: 'Недостатньо прав для видалення' });
     }
@@ -480,5 +481,107 @@ exports.removeMemberHackathon = async (req, res) => {
   } catch (error) {
     console.error('Помилка видалення учасника:', error);
     res.status(500).json({ message: 'Помилка сервера при видаленні учасника' });
+  }
+};
+
+// 12. Вся логіка для отримання даних вкладки Аналітика
+exports.getHackathonAnalytics = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const hackathon = await Hackathon.findById(id);
+    if (!hackathon) return res.status(404).json({ message: 'Хакатон не знайдено' });
+
+    // Рахуємо дні до дедлайну
+    const now = new Date();
+    const endDate = new Date(hackathon.endDate);
+    const diffTime = endDate - now;
+    const daysToDeadline = diffTime > 0 ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : 0;
+
+    // Рахуємо кількість команд
+    const teamsCount = await Team.countDocuments({ hackathonId: id });
+
+    // Отримуємо учасників і підтягуємо їхні дані з моделі User
+    const members = await HackathonMember.find({ 
+      hackathonId: id, 
+      status: 'Accepted' 
+    }).populate('userId', 'specialization');
+
+    // Створюємо об'єкт для підрахунку ролей
+    const roleBreakdown = {
+      Participant: 0,
+      'Co-organizer': 0,
+      Mentor: 0,
+      Jury: 0,
+      Organizer: 1
+    };
+
+    // Формуємо дані для графіка "Розподіл за спеціалізаціями"
+    const specializationCounts = {};
+    const registrationsByDay = {};
+
+    members.forEach(member => {
+      // Підрахунок за ролями
+      if (roleBreakdown[member.role] !== undefined) {
+        roleBreakdown[member.role] += 1;
+      }
+
+      // Динаміка реєстрацій по днях
+      const date = new Date(member.joinDate).toLocaleDateString('uk-UA', { month: 'short', day: 'numeric' });
+      registrationsByDay[date] = (registrationsByDay[date] || 0) + 1;
+
+      // Підрахунок спеціалізацій тільки для Participants
+      if (member.role === 'Participant') {
+        let specName = 'Без ролі';
+        if (member.userId && member.userId.specialization && member.userId.specialization.trim() !== '') {
+          specName = member.userId.specialization;
+        }
+        specializationCounts[specName] = (specializationCounts[specName] || 0) + 1;
+      }
+    });
+
+    const rolesData = Object.keys(specializationCounts).map(spec => ({
+      name: spec,
+      value: specializationCounts[spec]
+    }));
+
+    const registrationsData = Object.keys(registrationsByDay).map(date => ({
+      name: date,
+      users: registrationsByDay[date]
+    }));
+
+    // Відправляємо на фронт
+    res.status(200).json({
+      pageViews: hackathon.views || 0,
+      totalMembers: roleBreakdown.Participant,
+      roleBreakdown,
+      teamsCount: teamsCount,
+      daysToDeadline,
+      rolesData, // Це спеціалізації (Frontend, Backend)
+      registrationsData
+    });
+
+  } catch (error) {
+    console.error('Помилка аналітики:', error);
+    res.status(500).json({ message: 'Помилка сервера' });
+  }
+};
+
+// 13. Зчитування кількісті переглядів хакатону
+exports.incrementViews = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const hackathon = await Hackathon.findById(id);
+    
+    // Якщо користувач авторизований і він творець - НЕ рахуємо перегляд
+    if (req.user && hackathon.creatorId.toString() === req.user._id.toString()) {
+      return res.status(200).json({ message: 'Організатор, перегляд не зараховано' });
+    }
+
+    hackathon.views += 1;
+    await hackathon.save();
+    res.status(200).json({ message: 'Перегляд зараховано' });
+  } catch (error) {
+    res.status(500).json({ message: 'Помилка сервера' });
   }
 };

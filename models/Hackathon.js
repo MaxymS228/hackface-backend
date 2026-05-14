@@ -13,7 +13,8 @@ const hackathonSchema = new mongoose.Schema({
   prizes: { type: String, default: '' }, // Опис призів або сума
   status: { type: String, enum: ['Upcoming', 'Ongoing', 'Finished'], default: 'Upcoming' },
   organizerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], //Список учасників
+  participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Список учасників
+  views: { type: Number, default: 0 }, // Кількість переглядів
   createdAt: { type: Date, default: Date.now }
 });
 
