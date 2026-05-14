@@ -12,7 +12,14 @@ exports.getDashboardSummary = async (req, res) => {
     }
 
     // 1. Шукаємо всі хакатони, де користувач є учасником/суддею
-    const hackathonRoles = await HackathonMember.find({ userId }).populate('hackathonId');
+    //const hackathonRoles = await HackathonMember.find({ userId }).populate('hackathonId');
+
+    const hackathonRoles = await HackathonMember.find({ 
+      userId: userId,
+      $or: [
+        { status: 'Accepted' }
+      ]
+    }).populate('hackathonId');
 
     // 2. Шукаємо всі хакатони, де користувач є ОРГАНІЗАТОРОМ
     const organizedHackathons = await Hackathon.find({ organizerId: userId });

@@ -61,7 +61,8 @@ exports.createHackathon = async (req, res) => {
     const newMember = new HackathonMember({
       userId: req.userId,
       hackathonId: newHackathon._id,
-      role: 'Organizer'
+      role: 'Organizer', 
+      status: "Accepted"
     });
     
     await newMember.save();
@@ -159,18 +160,20 @@ exports.getHackathonById = async (req, res) => {
     // Шукаємо всіх учасників
     const teamMembers = await HackathonMember.find({
       hackathonId: id
-    }).populate('userId', 'name email avatarUrl specialization ');
+    }).populate('userId', 'name email avatar specialization ');
 
     // Форматуємо дані під наш фронтенд дизайн
     const members = teamMembers.map(member => ({
       _id: member._id,
       role: member.role,
       joinedAt: member.joinDate,
+      email: member.email, 
+      status: member.status,
       user: {
         _id: member.userId._id,
         name: member.userId.name,
         email: member.userId.email,
-        avatarUrl: member.userId.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.userId.name)}&background=6366f1&color=fff&size=128`
+        avatar: member.userId.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.userId.name)}&background=6366f1&color=fff&size=128`
       }
     }));
 
@@ -276,18 +279,19 @@ exports.leaveHackathon = async (req, res) => {
     const { id } = req.params;
     const userId = req.userId;
 
-    // Шукаємо і видаляємо запис учасника (перевіряємо, щоб це був саме Participant)
     const deletedMember = await HackathonMember.findOneAndDelete({
       hackathonId: id,
       userId: userId,
-      role: 'Participant'
+      role: { $in: ['Participant', 'Co-organizer', 'Jury', 'Mentor'] } 
     });
 
     if (!deletedMember) {
-      return res.status(400).json({ message: 'Ви не є учасником цього хакатону або не маєте прав для виходу' });
+      return res.status(400).json({ 
+        message: 'Ви не є учасником чи членом команди цього хакатону, або не маєте прав для виходу' 
+      });
     }
 
-    res.status(200).json({ message: 'Ви успішно скасували свою участь у хакатоні' });
+    res.status(200).json({ message: 'Ви успішно покинули хакатон' });
 
   } catch (error) {
     console.error('Помилка виходу з хакатону:', error);
@@ -298,19 +302,181 @@ exports.leaveHackathon = async (req, res) => {
 // 7. Видалення учасника організатором
 exports.removeParticipant = async (req, res) => {
   try {
-    const { id, userId } = req.params;
+    const { id, memberId } = req.params;
 
     // Знаходимо і видаляємо запис з HackathonMember
-    const deletedMember = await HackathonMember.findOneAndDelete({
+    const deleted = await HackathonMember.findOneAndDelete({
+      _id: memberId,
       hackathonId: id,
-      userId: userId
+      role: 'Participant'
     });
 
-    if (!deletedMember) {
+    if (!deleted) {
       return res.status(404).json({ message: 'Учасника не знайдено на цьому хакатоні' });
     }
 
     res.status(200).json({ message: 'Учасника успішно видалено' });
+  } catch (error) {
+    console.error('Помилка видалення учасника:', error);
+    res.status(500).json({ message: 'Помилка сервера при видаленні учасника' });
+  }
+};
+
+// 8. Створює запис у базі даних та відправляє лист на пошту
+exports.inviteToHackathon = async (req, res) => {
+  const { id } = req.params; // ID хакатону
+  const { email, role } = req.body;
+  const inviterName = req.user.name; // Беремо ім'я того, хто запрошує (з мідлвари protect)
+
+  try {
+    const hackathon = await Hackathon.findById(id);
+    if (!hackathon) return res.status(404).json({ message: 'Хакатон не знайдено' });
+
+    const user = await User.findOne({ email });
+    
+    // Перевірка чи вже існує запис з таким email або userId
+    const existingMember = await HackathonMember.findOne({
+      hackathonId: id,
+      $or: [
+        { email: email },
+        ...(user ? [{ userId: user._id }] : [])
+      ]
+    });
+
+    if (existingMember) {
+      const statusMsg = {
+        'Accepted': 'вже є членом команди цього хакатону',
+        'Pending':  'вже має активне запрошення на цей хакатон',
+        'Rejected': 'вже відхилив запрошення на цей хакатон',
+      };
+      return res.status(400).json({ 
+        message: `Користувач ${statusMsg[existingMember.status] || 'вже доданий до цього хакатону'}` 
+      });
+    }
+
+    const newMember = new HackathonMember({
+      hackathonId: id,
+      userId: user ? user._id : null,
+      email,
+      role,
+      status: 'Pending',
+      invitedBy: inviterName 
+    });
+    await newMember.save();
+
+    const inviteUrl = `${process.env.FRONTEND_URL}/join-hackathon/${newMember._id}`;
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: `Запрошення на хакатон "${hackathon.title}"`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+          <h2 style="color: #4f46e5;">Вас запрошено!</h2>
+          <p>Привіт! <strong>${inviterName}</strong> запрошує вас приєднатися до хакатону <strong>"${hackathon.title}"</strong> на роль <strong>${role}</strong>.</p>
+          <p style="margin-bottom: 30px;">Це чудова можливість долучитися до крутого проєкту!</p>
+          <a href="${inviteUrl}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Переглянути запрошення</a>
+          <p style="margin-top: 30px; font-size: 12px; color: #64748b;">Якщо ви не очікували цього листа, просто ігноруйте його.</p>
+        </div>
+      `
+    });
+
+    res.status(200).json({ message: 'Запрошення надіслано' });
+  } catch (error) {
+    res.status(500).json({ message: 'Помилка сервера' });
+  }
+};
+
+// 9. Отримання даних про конкретне запрошення
+exports.getInviteDetails = async (req, res) => {
+  try {
+    // Шукаємо мембера і "підтягуємо" дані хакатону (title)
+    const invite = await HackathonMember.findById(req.params.memberId)
+      .populate('hackathonId', 'title') 
+      .populate('userId', 'name'); 
+
+    if (!invite) return res.status(404).json({ message: 'Запрошення не знайдено' });
+
+    res.status(200).json({
+      hackathonTitle: invite.hackathonId.title,
+      role: invite.role,
+      inviter: invite.userId.name || "Організатор" 
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Помилка отримання даних' });
+  }
+};
+
+// 10. Роут: PATCH /api/hackathons/members/:memberId/respond
+exports.respondToInvite = async (req, res) => {
+  const { memberId } = req.params;
+  const { status } = req.body; 
+
+  try {
+    const member = await HackathonMember.findById(memberId);
+    if (!member) return res.status(404).json({ message: 'Запрошення не знайдено' });
+
+    member.status = status;
+    
+    if (req.user && !member.userId) {
+      member.userId = req.user._id;
+    }
+
+    await member.save();
+    res.status(200).json({ message: `Запрошення ${status}`, member });
+  } catch (error) {
+    res.status(500).json({ message: 'Помилка сервера' });
+  }
+};
+
+// 11. Видалення члена команди
+exports.removeMemberHackathon = async (req, res) => {
+  try {
+    const { id, memberId } = req.params;
+
+    const requester = await HackathonMember.findOne({
+      hackathonId: id,
+      userId: req.userId,
+      status: 'Accepted'
+    });
+
+    if (!requester) {
+      return res.status(403).json({ message: 'Ви не є членом цього хакатону' });
+    }
+
+    // Кого видаляємо
+    const target = await HackathonMember.findOne({
+      _id: memberId,
+      hackathonId: id
+    });
+
+    if (!target) {
+      return res.status(404).json({ message: 'Члена команди не знайдено' });
+    }
+
+    // Основний організатор — той хто створив хакатон
+    const hackathon = await Hackathon.findById(id);
+    const isMainOrganizer = hackathon.organizerId.toString() === req.userId;
+
+    // Логіка прав:
+    // 1. Основного організатора ніхто не може видалити
+    if (hackathon.organizerId.toString() === target.userId?.toString()) {
+      return res.status(403).json({ message: 'Не можна видалити головного організатора' });
+    }
+
+    // 2. Тільки головний організатор може видаляти інших Organizer/Co-organizer
+    if ((target.role === 'Organizer' || target.role === 'Co-organizer') && !isMainOrganizer) {
+      return res.status(403).json({ message: 'Тільки головний організатор може видаляти організаторів' });
+    }
+
+    // 3. Звичайний організатор може видаляти лише Jury/Mentor
+    if (!isMainOrganizer && requester.role !== 'Organizer') {
+      return res.status(403).json({ message: 'Недостатньо прав для видалення' });
+    }
+
+    await HackathonMember.findByIdAndDelete(memberId);
+    res.status(200).json({ message: 'Учасника успішно видалено' });
+
   } catch (error) {
     console.error('Помилка видалення учасника:', error);
     res.status(500).json({ message: 'Помилка сервера при видаленні учасника' });

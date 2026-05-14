@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
+const User = require('../models/User');
 
-module.exports = (req, res, next) => {
+module.exports = async (req, res, next) => {
   const authHeader = req.header('Authorization');
   
   if (!authHeader) {
@@ -19,6 +20,14 @@ module.exports = (req, res, next) => {
     const decoded = jwt.verify(token, secretKey);
     
     req.userId = decoded.id; 
+
+    const user = await User.findById(decoded.id).select('-password');
+
+    if (!user) {
+      return res.status(401).json({ message: 'Користувача не знайдено.' });
+    }
+
+    req.user = user;
     
     next();
   } catch (error) {

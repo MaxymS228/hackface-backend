@@ -22,8 +22,20 @@ router.post('/:id/join', authMiddleware, hackathonController.joinHackathon);
 // Залишення та видалення користувача з хакатону
 router.delete('/:id/leave', authMiddleware, hackathonController.leaveHackathon);
 
-// Видалення учасника організатором
-router.delete('/:id/members/:userId', authMiddleware, hackathonController.removeParticipant);
+// Роут для отримання певного (особливого) запрошення на хакатон
+router.get('/members/:memberId/details', authMiddleware, hackathonController.getInviteDetails);
+
+// Роут для прийняття/відхилення запрошення (користувачем)
+router.patch('/members/:memberId/respond', authMiddleware, hackathonController.respondToInvite);
+
+// Видалення учасника хакатону організатором
+router.delete('/:id/participants/:memberId', authMiddleware, hackathonController.removeParticipant);
+
+// Роут для відправки запрошення (організатором)
+router.post('/:id/invite', authMiddleware, hackathonController.inviteToHackathon);
+
+// Роут для видалення членів команди
+router.delete('/:id/members/:memberId', authMiddleware, hackathonController.removeMemberHackathon);
 
 module.exports = router;
 

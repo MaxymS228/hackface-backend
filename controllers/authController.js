@@ -57,6 +57,7 @@ const registerUser = async (req, res) => {
     console.error('Помилка реєстрації:', error);
     res.status(500).json({ message: 'Помилка сервера' });
   }
+
 };
 
 const verifyEmail = async (req, res) => {
