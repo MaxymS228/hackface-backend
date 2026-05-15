@@ -658,3 +658,74 @@ exports.checkMyRole = async (req, res) => {
     res.status(500).json({ message: 'Помилка сервера' });
   }
 };
+
+// 15. Отримання всіх хакатонів
+exports.getAllHackathons = async (req, res) => {
+  try {
+    const { search, format, status, sort } = req.query;
+
+    // Будуємо фільтр
+    const filter = {};
+    if (search) filter.title = { $regex: search, $options: 'i' };
+    if (format) filter.format = format;
+
+    // Сортування
+    let sortOption = { startDate: 1 };
+    if (sort === 'newest') sortOption = { createdAt: -1 };
+    if (sort === 'oldest') sortOption = { startDate: 1 };
+    if (sort === 'views') sortOption = { views: -1 };
+
+    const hackathons = await Hackathon.find(filter).sort(sortOption).lean();
+
+    // Підраховуємо учасників (тільки Participant + Accepted) для кожного хакатону
+    const hackathonsWithCounts = await Promise.all(
+      hackathons.map(async (hack) => {
+        const participantsCount = await HackathonMember.countDocuments({
+          hackathonId: hack._id,
+          role: 'Participant',
+          status: 'Accepted'
+        });
+        return { ...hack, participantsCount };
+      })
+    );
+
+    // Фільтр по статусу
+    let result = hackathonsWithCounts;
+    if (status) {
+      const now = new Date();
+      result = result.filter(hack => {
+        const start = new Date(hack.startDate);
+        const end = new Date(hack.endDate);
+        if (status === 'Ongoing') return now >= start && now <= end;
+        if (status === 'Upcoming') return now < start;
+        if (status === 'Completed') return now > end;
+        return true;
+      });
+    }
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Помилка при отриманні всіх хакатонів:', error);
+    res.status(500).json({ message: 'Помилка сервера при завантаженні хакатонів' });
+  }
+};
+
+// 16. Отримання загальної кількості учасників на всіх хакатонах
+exports.getTotalStats = async (req, res) => {
+  try {
+    const totalHackathons = await Hackathon.countDocuments();
+
+    // Унікальні userId серед всіх Participant + Accepted
+    const uniqueParticipants = await HackathonMember.distinct('userId', {
+      role: 'Participant',
+      status: 'Accepted'
+    });
+
+    res.status(200).json({
+      totalHackathons,
+      totalParticipants: uniqueParticipants.length,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Помилка сервера' });
+  }
+};

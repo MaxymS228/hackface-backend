@@ -7,8 +7,14 @@ const upload = require('../middleware/upload');
 // Створення хакатону (потрібна авторизація + завантаження 1 файлу 'banner')
 router.post('/', authMiddleware, upload.single('banner'), hackathonController.createHackathon);
 
+// Роут для отримання всіх хакатонів
+router.get('/', hackathonController.getAllHackathons);
+
 // Отримання хакатонів організатора
 router.get('/my-hackathons', authMiddleware, hackathonController.getMyHackathons);
+
+// Роут для отримання загальної кількості учасників на всіх хакатонах
+router.get('/stats', hackathonController.getTotalStats);
 
 // Отримання одного хакатону за ID (публічний доступ)
 router.get('/:id', hackathonController.getHackathonById);
@@ -45,6 +51,8 @@ router.post('/:id/view', hackathonController.incrementViews);
 
 // Роут для отримання ролі користувача
 router.get('/:id/my-role', authMiddleware, hackathonController.checkMyRole);
+
+
 
 module.exports = router;
 
