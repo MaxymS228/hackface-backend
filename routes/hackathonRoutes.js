@@ -43,6 +43,9 @@ router.get('/:id/analytics', authMiddleware, hackathonController.getHackathonAna
 // Роут для оновлення кількісті переглядів хакатону
 router.post('/:id/view', hackathonController.incrementViews);
 
+// Роут для отримання ролі користувача
+router.get('/:id/my-role', authMiddleware, hackathonController.checkMyRole);
+
 module.exports = router;
 
 // const express = require('express');

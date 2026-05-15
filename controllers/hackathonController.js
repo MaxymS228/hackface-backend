@@ -79,13 +79,50 @@ exports.createHackathon = async (req, res) => {
   }
 };
 
-// 2. Отримання хакатонів, створених поточним користувачем (для Дашборда)
+// 2. Отримання хакатонів, де присутній поточний користувач (для Дашборда)
 exports.getMyHackathons = async (req, res) => {
   try {
-    const hacks = await Hackathon.find({ organizerId: req.userId }).sort({ createdAt: -1 });
-    res.status(200).json(hacks);
+    const userId = req.userId;
+
+    // Отримуємо хакатони, які користувач створив сам
+    const organizedHacks = await Hackathon.find({ organizerId: userId }).lean();
+
+    // Отримуємо хакатони, до яких користувач ПРИЄДНАВСЯ (як Participant, Mentor, Jury, Co-organizer)
+    const memberships = await HackathonMember.find({ 
+      userId: userId,
+      status: 'Accepted'
+    }).populate('hackathonId').lean();
+
+    const hackathonsMap = new Map();
+
+    organizedHacks.forEach(hack => {
+      hackathonsMap.set(hack._id.toString(), {
+        ...hack,
+        userRole: 'Organizer'
+      });
+    });
+
+    // Додаємо хакатони, де користувач є учасником/персоналом
+    memberships.forEach(member => {
+      if (member.hackathonId) {
+        const hackId = member.hackathonId._id.toString();
+        if (!hackathonsMap.has(hackId)) {
+          hackathonsMap.set(hackId, {
+            ...member.hackathonId,
+            userRole: member.role 
+          });
+        }
+      }
+    });
+
+    // Перетворюємо Map назад у масив і сортуємо за датою (від новіших до старіших)
+    const allMyHackathons = Array.from(hackathonsMap.values()).sort((a, b) => {
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
+    res.status(200).json(allMyHackathons);
   } catch (error) {
-    console.error('Помилка отримання хакатонів:', error);
+    console.error('Помилка отримання моїх хакатонів:', error);
     res.status(500).json({ message: 'Помилка сервера при завантаженні хакатонів' });
   }
 };
@@ -323,7 +360,7 @@ exports.removeParticipant = async (req, res) => {
   }
 };
 
-// 8. Створює запис у базі даних та відправляє лист на пошту
+// 8. Запрошення члена команди: Створює запис у базі даних та відправляє лист на пошту
 exports.inviteToHackathon = async (req, res) => {
   const { id } = req.params; // ID хакатону
   const { email, role } = req.body;
@@ -582,6 +619,42 @@ exports.incrementViews = async (req, res) => {
     await hackathon.save();
     res.status(200).json({ message: 'Перегляд зараховано' });
   } catch (error) {
+    res.status(500).json({ message: 'Помилка сервера' });
+  }
+};
+
+// 14. Перевірка ролі користувача для конкретного хакатону
+exports.checkMyRole = async (req, res) => {
+  try {
+    const { id } = req.params; 
+    const userId = req.userId; 
+
+    const hackathon = await Hackathon.findById(id);
+    if (!hackathon) {
+      return res.status(404).json({ message: 'Хакатон не знайдено' });
+    }
+
+    // Перевіряємо, чи це головний організатор
+    if (hackathon.organizerId.toString() === userId.toString()) {
+      return res.status(200).json({ role: 'Organizer' });
+    }
+
+    // Якщо ні, шукаємо його в таблиці учасників
+    const member = await HackathonMember.findOne({ 
+      hackathonId: id, 
+      userId: userId,
+      status: 'Accepted' 
+    });
+
+    if (member) {
+      return res.status(200).json({ role: member.role }); 
+    }
+
+    // Якщо взагалі не знайшли
+    return res.status(200).json({ role: 'None' });
+
+  } catch (error) {
+    console.error('Помилка перевірки ролі:', error);
     res.status(500).json({ message: 'Помилка сервера' });
   }
 };
