@@ -12,32 +12,58 @@ require('events').EventEmitter.defaultMaxListeners = 20;
 app.use(cors());
 app.use(express.json());
 
-//Добре
-const authRoutes = require('./routes/authRoutes');
-app.use('/api', authRoutes); 
+// //Добре
+// const authRoutes = require('./routes/authRoutes');
+// app.use('/api', authRoutes); 
 
+// const projectRoutes = require('./routes/projectRoutes');
+// app.use('/api', projectRoutes);
+
+// //Добре
+// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// //Добре
+// const hackathonRoutes = require('./routes/hackathonRoutes');
+// app.use('/api/hackathons', hackathonRoutes);
+
+// //Добре
+// const teamRoutes = require('./routes/teamRoutes');
+// app.use('/api/teams', teamRoutes);
+
+// //Добре
+// const dashboardRoutes = require('./routes/dashboardRoutes');
+// app.use('/api/dashboard', dashboardRoutes);
+
+// //Добре
+// const userRoutes = require('./routes/userRoutes');
+// app.use('/api/users', userRoutes);
+console.log('Loading authRoutes...');
+const authRoutes = require('./routes/authRoutes');
+app.use('/api', authRoutes);
+
+console.log('Loading projectRoutes...');
 const projectRoutes = require('./routes/projectRoutes');
 app.use('/api', projectRoutes);
 
-//Добре
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-//Добре
+console.log('Loading hackathonRoutes...');
 const hackathonRoutes = require('./routes/hackathonRoutes');
 app.use('/api/hackathons', hackathonRoutes);
 
-//Добре
+console.log('Loading teamRoutes...');
 const teamRoutes = require('./routes/teamRoutes');
 app.use('/api/teams', teamRoutes);
 
-//Добре
+console.log('Loading dashboardRoutes...');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 app.use('/api/dashboard', dashboardRoutes);
 
-//Добре
+console.log('Loading userRoutes...');
 const userRoutes = require('./routes/userRoutes');
 app.use('/api/users', userRoutes);
 
+console.log('All routes loaded successfully');
 
 // Routes
 app.get('/', (req, res) => {
