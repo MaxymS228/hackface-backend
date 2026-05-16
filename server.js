@@ -8,6 +8,9 @@ const app = express();
 
 require('events').EventEmitter.defaultMaxListeners = 20;
 
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
+
 // Middleware
 app.use(cors());
 app.use(express.json());
