@@ -8,8 +8,8 @@ const cloudinary = require('cloudinary').v2;
 // Налаштовування transporter для відправки листів
 const transporter = nodemailer.createTransport({
   service: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
+  port: 587, 
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
