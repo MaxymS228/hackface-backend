@@ -7,11 +7,16 @@ const cloudinary = require('cloudinary').v2;
 
 // Налаштовування transporter для відправки листів
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  service: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 10000,
 });
 
 // Допоміжна функція для видалення файлу з Cloudinary
