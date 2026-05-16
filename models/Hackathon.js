@@ -15,7 +15,10 @@ const hackathonSchema = new mongoose.Schema({
   organizerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Список учасників
   views: { type: Number, default: 0 }, // Кількість переглядів
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  minTeamSize: { type: Number, default: 1 },
+  maxTeamSize: { type: Number, default: 5 },
+  allowSolo: { type: Boolean, default: true }
 });
 
 module.exports = mongoose.model('Hackathon', hackathonSchema);

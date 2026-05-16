@@ -14,7 +14,15 @@ const hackathonMemberSchema = new mongoose.Schema({
     enum: ['Pending', 'Accepted', 'Rejected'], 
     default: 'Accepted'
   },
-  joinDate: { type: Date, default: Date.now }
+  joinDate: { type: Date, default: Date.now },
+  invitedBy: { type: String, default: '' },
+  teamId: { type: mongoose.Schema.Types.ObjectId, ref: 'Team', default: null },
+  teamRole: { type: String, enum: ['Captain', 'Member', null], default: null },
+  primaryRole: {
+    type: String,
+    enum: ['Frontend', 'Backend', 'Design', 'ML', 'Mobile', 'DevOps', 'Other', null],
+    default: null
+  },
 });
 
 module.exports = mongoose.model('HackathonMember', hackathonMemberSchema);

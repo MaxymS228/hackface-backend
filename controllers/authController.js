@@ -5,11 +5,16 @@ const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 10000,
 });
 
 const registerUser = async (req, res) => {
@@ -33,6 +38,13 @@ const registerUser = async (req, res) => {
     });
 
     await newUser.save();
+
+    //====================================
+    res.status(201).json({ message: 'Користувач зареєстрований. Лист відправлено.' });
+
+    transporter.sendMail(mailOptions).catch(err => {
+      console.error('Помилка відправки листа:', err);
+    });
 
     // Створюємо посилання для підтвердження (яке веде на фронтенд)
     const verificationUrl = `${process.env.FRONTEND_URL}/verify/${verificationToken}`;

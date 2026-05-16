@@ -18,14 +18,17 @@ app.use('/api', authRoutes);
 
 const projectRoutes = require('./routes/projectRoutes');
 app.use('/api', projectRoutes);
+
 //Добре
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+//Добре
 const hackathonRoutes = require('./routes/hackathonRoutes');
 app.use('/api/hackathons', hackathonRoutes);
 
+//Добре
 const teamRoutes = require('./routes/teamRoutes');
-app.use('/api', teamRoutes);
+app.use('/api/teams', teamRoutes);
 
 //Добре
 const dashboardRoutes = require('./routes/dashboardRoutes');

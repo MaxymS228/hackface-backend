@@ -1,7 +1,8 @@
 const HackathonMember = require('../models/HackathonMember');
-const TeamMember = require('../models/TeamMember');
+const TeamMember = require('../models/TeamApplication');
 const Project = require('../models/Project');
-const Hackathon = require('../models/Hackathon'); // Додали імпорт моделі хакатону
+const Hackathon = require('../models/Hackathon');
+const TeamApplication = require('../models/TeamApplication');
 
 exports.getDashboardSummary = async (req, res) => {
   try {
@@ -52,7 +53,7 @@ exports.getDashboardSummary = async (req, res) => {
     allHackathons.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     // 4. Шукаємо всі команди, в яких є користувач
-    const teamMemberships = await TeamMember.find({ userId }).populate('teamId');
+    const teamMemberships = await TeamApplication.find({ userId }).populate('teamId');
     
     // Витягуємо тільки ID команд, щоб знайти їхні проєкти
     const teamIds = teamMemberships
