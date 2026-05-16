@@ -8,6 +8,7 @@ const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
   secure: false,
+  family: 4,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -39,13 +40,6 @@ const registerUser = async (req, res) => {
 
     await newUser.save();
 
-    //====================================
-    // res.status(201).json({ message: 'Користувач зареєстрований. Лист відправлено.' });
-
-    // transporter.sendMail(mailOptions).catch(err => {
-    //   console.error('Помилка відправки листа:', err);
-    // });
-
     // Створюємо посилання для підтвердження (яке веде на фронтенд)
     const verificationUrl = `${process.env.FRONTEND_URL}/verify/${verificationToken}`;
 
@@ -62,9 +56,13 @@ const registerUser = async (req, res) => {
       `
     };
 
-    await transporter.sendMail(mailOptions);
-
     res.status(201).json({ message: 'Користувач зареєстрований. Лист відправлено.' });
+
+    transporter.sendMail(mailOptions)
+      .then(() => console.log('Лист відправлено:', newUser.email))
+      .catch(err => console.error('Помилка листа:', err.message));
+
+    //res.status(201).json({ message: 'Користувач зареєстрований. Лист відправлено.' });
   } catch (error) {
     console.error('Помилка реєстрації:', error);
     res.status(500).json({ message: 'Помилка сервера' });
