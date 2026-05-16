@@ -1,21 +1,23 @@
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+//const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
+const { Resend } = require('resend');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587, 
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 10000,
-});
+// const transporter = nodemailer.createTransport({
+//   host: 'smtp.gmail.com',
+//   port: 587, 
+//   secure: false,
+//   auth: {
+//     user: process.env.EMAIL_USER,
+//     pass: process.env.EMAIL_PASS,
+//   },
+//   connectionTimeout: 10000,
+//   greetingTimeout: 10000,
+//   socketTimeout: 10000,
+// });
 
 const registerUser = async (req, res) => {
   const { name, email, password } = req.body;
@@ -42,9 +44,29 @@ const registerUser = async (req, res) => {
     // Створюємо посилання для підтвердження (яке веде на фронтенд)
     const verificationUrl = `${process.env.FRONTEND_URL}/verify/${verificationToken}`;
 
-    // Відправляємо лист
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
+    res.status(201).json({ message: 'Користувач зареєстрований. Лист відправлено.' });
+
+    // // Відправляємо лист
+    // const mailOptions = {
+    //   from: process.env.EMAIL_USER,
+    //   to: newUser.email,
+    //   subject: 'Підтвердження реєстрації в Hackathon Face',
+    //   html: `
+    //     <h2>Вітаємо, ${newUser.name}!</h2>
+    //     <p>Дякуємо за реєстрацію. Будь ласка, підтвердіть вашу електронну пошту, перейшовши за посиланням нижче:</p>
+    //     <a href="${verificationUrl}" style="padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">Підтвердити пошту</a>
+    //     <p>Якщо кнопка не працює, скопіюйте це посилання у браузер: <br/> ${verificationUrl}</p>
+    //   `
+    // };
+
+    // res.status(201).json({ message: 'Користувач зареєстрований. Лист відправлено.' });
+
+    // transporter.sendMail(mailOptions)
+    //   .then(() => console.log('Лист відправлено:', newUser.email))
+    //   .catch(err => console.error('Помилка листа:', err.message));
+
+    resend.emails.send({
+      from: 'Hackathon Face <onboarding@resend.dev>',
       to: newUser.email,
       subject: 'Підтвердження реєстрації в Hackathon Face',
       html: `
@@ -53,15 +75,9 @@ const registerUser = async (req, res) => {
         <a href="${verificationUrl}" style="padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">Підтвердити пошту</a>
         <p>Якщо кнопка не працює, скопіюйте це посилання у браузер: <br/> ${verificationUrl}</p>
       `
-    };
+    }).then(() => console.log('✅ Лист відправлено:', newUser.email))
+      .catch(err => console.error('❌ Помилка листа:', err.message));
 
-    res.status(201).json({ message: 'Користувач зареєстрований. Лист відправлено.' });
-
-    transporter.sendMail(mailOptions)
-      .then(() => console.log('Лист відправлено:', newUser.email))
-      .catch(err => console.error('Помилка листа:', err.message));
-
-    //res.status(201).json({ message: 'Користувач зареєстрований. Лист відправлено.' });
   } catch (error) {
     console.error('Помилка реєстрації:', error);
     res.status(500).json({ message: 'Помилка сервера' });

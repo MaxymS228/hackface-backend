@@ -2,22 +2,24 @@ const Hackathon = require('../models/Hackathon');
 const HackathonMember = require('../models/HackathonMember');
 const Team = require('../models/Team');
 const User = require('../models/User');
-const nodemailer = require('nodemailer');
+//const nodemailer = require('nodemailer');
 const cloudinary = require('cloudinary').v2; 
+const { Resend } = require('resend');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Налаштовування transporter для відправки листів
-const transporter = nodemailer.createTransport({
-  service: 'smtp.gmail.com',
-  port: 587, 
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 10000,
-});
+// // Налаштовування transporter для відправки листів
+// const transporter = nodemailer.createTransport({
+//   service: 'smtp.gmail.com',
+//   port: 587, 
+//   secure: false,
+//   auth: {
+//     user: process.env.EMAIL_USER,
+//     pass: process.env.EMAIL_PASS,
+//   },
+//   connectionTimeout: 10000,
+//   greetingTimeout: 10000,
+//   socketTimeout: 10000,
+// });
 
 // Допоміжна функція для видалення файлу з Cloudinary
 const deleteOldImageFromCloudinary = async (imageUrl) => {
@@ -277,8 +279,37 @@ exports.joinHackathon = async (req, res) => {
       const startDate = new Date(hackathon.startDate).toLocaleDateString('uk-UA');
       const endDate = new Date(hackathon.endDate).toLocaleDateString('uk-UA');
 
-      const mailOptions = {
-        from: process.env.EMAIL_USER,
+      // const mailOptions = {
+      //   from: process.env.EMAIL_USER,
+      //   to: user.email,
+      //   subject: `Успішна реєстрація на хакатон: ${hackathon.title}`,
+      //   html: `
+      //     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+      //       <h2 style="color: #4f46e5;">Вітаємо, ${user.name || 'учаснику'}! 🎉</h2>
+      //       <p>Дякуємо Вам, що приєдналися до нашого хакатону <strong>"${hackathon.title}"</strong>.</p>
+      //       <p>Ми раді бачити вас серед учасників. Це чудова можливість проявити свої навички, створити крутий проєкт та поборотися за призи!</p>
+            
+      //       <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
+      //         <p style="margin: 0 0 10px 0;"><strong>📅 Дати проведення:</strong> з ${startDate} по ${endDate}</p>
+      //         <p style="margin: 0 0 10px 0;"><strong>📍 Формат:</strong> ${hackathon.format === 'Online' ? 'Онлайн' : hackathon.location}</p>
+      //       </div>
+
+      //       <p>Ближче до початку ми надішлемо додаткову інформацію щодо формування команд та подальших кроків.</p>
+      //       <p>Бажаємо успіхів та натхнення!</p>
+      //       <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+      //       <p style="color: #64748b; font-size: 14px;">З повагою,<br>Команда Hackathon Face</p>
+      //     </div>
+      //   `
+      // };
+
+      // try {
+      //   await transporter.sendMail(mailOptions);
+      //   console.log(`Лист про реєстрацію відправлено на ${user.email}`);
+      // } catch (emailError) {
+      //   console.error('Помилка відправки листа, але користувача зареєстровано:', emailError);
+      // }
+      resend.emails.send({
+        from: 'Hackathon Face <onboarding@resend.dev>',
         to: user.email,
         subject: `Успішна реєстрація на хакатон: ${hackathon.title}`,
         html: `
@@ -286,26 +317,17 @@ exports.joinHackathon = async (req, res) => {
             <h2 style="color: #4f46e5;">Вітаємо, ${user.name || 'учаснику'}! 🎉</h2>
             <p>Дякуємо Вам, що приєдналися до нашого хакатону <strong>"${hackathon.title}"</strong>.</p>
             <p>Ми раді бачити вас серед учасників. Це чудова можливість проявити свої навички, створити крутий проєкт та поборотися за призи!</p>
-            
             <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
               <p style="margin: 0 0 10px 0;"><strong>📅 Дати проведення:</strong> з ${startDate} по ${endDate}</p>
               <p style="margin: 0 0 10px 0;"><strong>📍 Формат:</strong> ${hackathon.format === 'Online' ? 'Онлайн' : hackathon.location}</p>
             </div>
-
-            <p>Ближче до початку ми надішлемо додаткову інформацію щодо формування команд та подальших кроків.</p>
             <p>Бажаємо успіхів та натхнення!</p>
             <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
             <p style="color: #64748b; font-size: 14px;">З повагою,<br>Команда Hackathon Face</p>
           </div>
         `
-      };
-
-      try {
-        await transporter.sendMail(mailOptions);
-        console.log(`Лист про реєстрацію відправлено на ${user.email}`);
-      } catch (emailError) {
-        console.error('Помилка відправки листа, але користувача зареєстровано:', emailError);
-      }
+      }).then(() => console.log(`Лист відправлено на ${user.email}`))
+        .catch(err => console.error('Помилка листа:', err));
     }
 
     res.status(200).json({ message: 'Ви успішно приєдналися до хакатону!' });
@@ -409,8 +431,22 @@ exports.inviteToHackathon = async (req, res) => {
 
     const inviteUrl = `${process.env.FRONTEND_URL}/join-hackathon/${newMember._id}`;
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    // await transporter.sendMail({
+    //   from: process.env.EMAIL_USER,
+    //   to: email,
+    //   subject: `Запрошення на хакатон "${hackathon.title}"`,
+    //   html: `
+    //     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+    //       <h2 style="color: #4f46e5;">Вас запрошено!</h2>
+    //       <p>Привіт! <strong>${inviterName}</strong> запрошує вас приєднатися до хакатону <strong>"${hackathon.title}"</strong> на роль <strong>${role}</strong>.</p>
+    //       <p style="margin-bottom: 30px;">Це чудова можливість долучитися до крутого проєкту!</p>
+    //       <a href="${inviteUrl}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Переглянути запрошення</a>
+    //       <p style="margin-top: 30px; font-size: 12px; color: #64748b;">Якщо ви не очікували цього листа, просто ігноруйте його.</p>
+    //     </div>
+    //   `
+    // });
+    resend.emails.send({
+      from: 'Hackathon Face <onboarding@resend.dev>',
       to: email,
       subject: `Запрошення на хакатон "${hackathon.title}"`,
       html: `
@@ -422,7 +458,8 @@ exports.inviteToHackathon = async (req, res) => {
           <p style="margin-top: 30px; font-size: 12px; color: #64748b;">Якщо ви не очікували цього листа, просто ігноруйте його.</p>
         </div>
       `
-    });
+    }).then(() => console.log(`Запрошення відправлено на ${email}`))
+      .catch(err => console.error('Помилка запрошення:', err));
 
     res.status(200).json({ message: 'Запрошення надіслано' });
   } catch (error) {
