@@ -40,11 +40,11 @@ const registerUser = async (req, res) => {
     await newUser.save();
 
     //====================================
-    res.status(201).json({ message: 'Користувач зареєстрований. Лист відправлено.' });
+    // res.status(201).json({ message: 'Користувач зареєстрований. Лист відправлено.' });
 
-    transporter.sendMail(mailOptions).catch(err => {
-      console.error('Помилка відправки листа:', err);
-    });
+    // transporter.sendMail(mailOptions).catch(err => {
+    //   console.error('Помилка відправки листа:', err);
+    // });
 
     // Створюємо посилання для підтвердження (яке веде на фронтенд)
     const verificationUrl = `${process.env.FRONTEND_URL}/verify/${verificationToken}`;
