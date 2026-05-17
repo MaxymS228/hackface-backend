@@ -45,7 +45,6 @@ const registerUser = async (req, res) => {
     // Створюємо посилання для підтвердження (яке веде на фронтенд)
     const verificationUrl = `${process.env.FRONTEND_URL}/verify/${verificationToken}`;
 
-    res.status(201).json({ message: 'Користувач зареєстрований. Лист відправлено.' });
 
     // // Відправляємо лист
     // const mailOptions = {
@@ -100,6 +99,9 @@ const registerUser = async (req, res) => {
         console.error('Помилка при відправці HTTP-запиту:', error.message);
       }
     };
+
+    sendConfirmationEmail(newUser, verificationUrl);
+    res.status(201).json({ message: 'Користувач зареєстрований. Лист відправлено.' });
 
   } catch (error) {
     console.error('Помилка реєстрації:', error);
