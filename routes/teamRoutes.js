@@ -10,6 +10,8 @@ router.post('/', authMiddleware, teamController.createTeam);
 router.get('/hackathon/:hackathonId', authMiddleware, teamController.getHackathonTeams);
 // Роут для отримання команд що шукають учасників
 router.get('/hackathon/:hackathonId/looking', authMiddleware, teamController.getTeamsLookingForMembers);
+// Роут для отримання всіх команд де присутній користувач
+router.get('/my/teams', authMiddleware, teamController.getMyTeams);
 // Роут для отримання даних/деталів команди
 router.get('/:teamId', authMiddleware, teamController.getTeamDetails);
 // Роут для оновлення даних команди

@@ -53,12 +53,32 @@ exports.getDashboardSummary = async (req, res) => {
     allHackathons.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     // 4. Шукаємо всі команди, в яких є користувач
-    const teamMemberships = await TeamApplication.find({ userId }).populate('teamId');
-    
-    // Витягуємо тільки ID команд, щоб знайти їхні проєкти
+    const teamMemberships = await HackathonMember.find({
+      userId,
+      teamId: { $ne: null },
+      role: 'Participant',
+      status: 'Accepted'
+    }).populate({
+      path: 'teamId',
+      populate: { path: 'captainId', select: 'name' }
+    }).populate('hackathonId', 'title');
+
+    const teams = teamMemberships
+    .filter(m => m.teamId)
+    .map(m => ({
+      _id: m.teamId._id,
+      name: m.teamId.name,
+      description: m.teamId.description,
+      isCaptain: m.teamId.captainId?._id?.toString() === userId.toString(),
+      teamRole: m.teamRole,
+      hackathonId: m.hackathonId?._id,
+      hackathonTitle: m.hackathonId?.title,
+      membersCount: 0, // можна додати окремий запит
+    }));
+
     const teamIds = teamMemberships
-      .filter(tm => tm.teamId) // Захист від видалених команд
-      .map(tm => tm.teamId._id);
+      .filter(m => m.teamId)
+      .map(m => m.teamId._id);
 
     // 5. Шукаємо проєкти, які належать до команд користувача
     const projects = await Project.find({ teamId: { $in: teamIds } });
@@ -68,7 +88,7 @@ exports.getDashboardSummary = async (req, res) => {
       success: true,
       data: {
         roles: hackathonRoles,
-        teams: teamMemberships,
+        teams: teams,
         projects: projects,
         hackathons: allHackathons
       }

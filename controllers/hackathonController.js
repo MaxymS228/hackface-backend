@@ -1,24 +1,9 @@
 const Hackathon = require('../models/Hackathon');
 const HackathonMember = require('../models/HackathonMember');
 const Team = require('../models/Team');
+const TeamApplication = require('../models/TeamApplication');
 const User = require('../models/User');
-//const nodemailer = require('nodemailer');
 const cloudinary = require('cloudinary').v2; 
-
-// // Налаштовування transporter для відправки листів
-// const transporter = nodemailer.createTransport({
-//   host: 'smtp-relay.brevo.com',
-//   port: 587,
-//   secure: false,
-//   family: 4,
-//   auth: {
-//     user: process.env.BREVO_USER,
-//     pass: process.env.BREVO_PASS,
-//   },
-//   connectionTimeout: 15000,
-//   greetingTimeout: 15000,
-//   socketTimeout: 15000,
-// });
 
 // Допоміжна функція для видалення файлу з Cloudinary
 const deleteOldImageFromCloudinary = async (imageUrl) => {
@@ -36,6 +21,50 @@ const deleteOldImageFromCloudinary = async (imageUrl) => {
     }
   } catch (err) {
     console.error('Помилка при видаленні старого банера з Cloudinary:', err);
+  }
+};
+
+// Допоміжна функція для обробка команди при виході учасника
+const handleTeamOnLeave = async (member) => {
+  if (!member.teamId) return;
+
+  const team = await Team.findById(member.teamId);
+  if (!team) return;
+
+  // Рахуємо скільки учасників залишиться
+  const remainingMembers = await HackathonMember.find({
+    teamId: member.teamId,
+    userId: { $ne: member.userId },
+    status: 'Accepted'
+  });
+
+  if (remainingMembers.length === 0) {
+    // Команда порожня — видаляємо її повністю
+    await Team.findByIdAndDelete(member.teamId);
+    await TeamApplication.deleteMany({ teamId: member.teamId });
+    console.log(`Команду ${team.name} видалено — більше немає учасників`);
+    return;
+  }
+
+  // Якщо виходить капітан — передаємо роль іншому
+  if (team.captainId.toString() === member.userId.toString()) {
+    const newCaptain = remainingMembers[0]; // Перший учасник стає капітаном
+    
+    // Оновлюємо капітана в Team
+    team.captainId = newCaptain.userId;
+    await team.save();
+
+    // Оновлюємо teamRole нового капітана
+    newCaptain.teamRole = 'Captain';
+    await newCaptain.save();
+
+    console.log(`Капітан команди ${team.name} змінився на userId: ${newCaptain.userId}`);
+  }
+
+  // Відкриваємо команду якщо була закрита
+  if (!team.isOpen && !team.lockedAt) {
+    team.isOpen = true;
+    await team.save();
   }
 };
 
@@ -278,35 +307,6 @@ exports.joinHackathon = async (req, res) => {
       const startDate = new Date(hackathon.startDate).toLocaleDateString('uk-UA');
       const endDate = new Date(hackathon.endDate).toLocaleDateString('uk-UA');
 
-      // const mailOptions = {
-      //   from: `"Hackathon Face" <ab893d001@smtp-brevo.com>`,
-      //   to: user.email,
-      //   subject: `Успішна реєстрація на хакатон: ${hackathon.title}`,
-      //   html: `
-      //     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-      //       <h2 style="color: #4f46e5;">Вітаємо, ${user.name || 'учаснику'}! 🎉</h2>
-      //       <p>Дякуємо Вам, що приєдналися до нашого хакатону <strong>"${hackathon.title}"</strong>.</p>
-      //       <p>Ми раді бачити вас серед учасників. Це чудова можливість проявити свої навички, створити крутий проєкт та поборотися за призи!</p>
-            
-      //       <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
-      //         <p style="margin: 0 0 10px 0;"><strong>📅 Дати проведення:</strong> з ${startDate} по ${endDate}</p>
-      //         <p style="margin: 0 0 10px 0;"><strong>📍 Формат:</strong> ${hackathon.format === 'Online' ? 'Онлайн' : hackathon.location}</p>
-      //       </div>
-
-      //       <p>Ближче до початку ми надішлемо додаткову інформацію щодо формування команд та подальших кроків.</p>
-      //       <p>Бажаємо успіхів та натхнення!</p>
-      //       <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-      //       <p style="color: #64748b; font-size: 14px;">З повагою,<br>Команда Hackathon Face</p>
-      //     </div>
-      //   `
-      // };
-
-      // try {
-      //   await transporter.sendMail(mailOptions);
-      //   console.log(`Лист про реєстрацію відправлено на ${user.email}`);
-      // } catch (emailError) {
-      //   console.error('Помилка відправки листа, але користувача зареєстровано:', emailError);
-      // }
       try {
         const response = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
@@ -363,26 +363,32 @@ exports.joinHackathon = async (req, res) => {
   }
 };
 
-// 6. Вихід з хакатону (DELETE /api/hackathons/:id/leave)
+// 6. Вихід з хакатону
 exports.leaveHackathon = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.userId;
 
-    const deletedMember = await HackathonMember.findOneAndDelete({
+    const member = await HackathonMember.findOne({
       hackathonId: id,
-      userId: userId,
-      role: { $in: ['Participant', 'Co-organizer', 'Jury', 'Mentor'] } 
+      userId,
+      role: { $in: ['Participant', 'Co-organizer', 'Jury', 'Mentor'] }
     });
 
-    if (!deletedMember) {
-      return res.status(400).json({ 
-        message: 'Ви не є учасником чи членом команди цього хакатону, або не маєте прав для виходу' 
+    if (!member) {
+      return res.status(400).json({
+        message: 'Ви не є учасником цього хакатону або не маєте прав для виходу'
       });
     }
 
-    res.status(200).json({ message: 'Ви успішно покинули хакатон' });
+    // Обробляємо команду перед видаленням
+    if (member.role === 'Participant') {
+      await handleTeamOnLeave(member);
+    }
 
+    await HackathonMember.findByIdAndDelete(member._id);
+
+    res.status(200).json({ message: 'Ви успішно покинули хакатон' });
   } catch (error) {
     console.error('Помилка виходу з хакатону:', error);
     res.status(500).json({ message: 'Помилка сервера при скасуванні участі' });
@@ -394,16 +400,20 @@ exports.removeParticipant = async (req, res) => {
   try {
     const { id, memberId } = req.params;
 
-    // Знаходимо і видаляємо запис з HackathonMember
-    const deleted = await HackathonMember.findOneAndDelete({
+    const member = await HackathonMember.findOne({
       _id: memberId,
       hackathonId: id,
       role: 'Participant'
     });
 
-    if (!deleted) {
+    if (!member) {
       return res.status(404).json({ message: 'Учасника не знайдено на цьому хакатоні' });
     }
+
+    // Обробляємо команду перед видаленням
+    await handleTeamOnLeave(member);
+
+    await HackathonMember.findByIdAndDelete(member._id);
 
     res.status(200).json({ message: 'Учасника успішно видалено' });
   } catch (error) {
@@ -456,20 +466,6 @@ exports.inviteToHackathon = async (req, res) => {
 
     const inviteUrl = `${process.env.FRONTEND_URL}/join-hackathon/${newMember._id}`;
 
-    // await transporter.sendMail({
-    //   from: `"Hackathon Face" <ab893d001@smtp-brevo.com>`,
-    //   to: email,
-    //   subject: `Запрошення на хакатон "${hackathon.title}"`,
-    //   html: `
-    //     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
-    //       <h2 style="color: #4f46e5;">Вас запрошено!</h2>
-    //       <p>Привіт! <strong>${inviterName}</strong> запрошує вас приєднатися до хакатону <strong>"${hackathon.title}"</strong> на роль <strong>${role}</strong>.</p>
-    //       <p style="margin-bottom: 30px;">Це чудова можливість долучитися до крутого проєкту!</p>
-    //       <a href="${inviteUrl}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Переглянути запрошення</a>
-    //       <p style="margin-top: 30px; font-size: 12px; color: #64748b;">Якщо ви не очікували цього листа, просто ігноруйте його.</p>
-    //     </div>
-    //   `
-    // });
     try {
       const response = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
