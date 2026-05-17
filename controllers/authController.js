@@ -1,24 +1,24 @@
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+//const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 // const { Resend } = require('resend');
 // const resend = new Resend(process.env.RESEND_API_KEY);
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false,
-  family: 4,
-  auth: {
-    user: process.env.BREVO_USER,
-    pass: process.env.BREVO_PASS,
-  },
-  connectionTimeout: 15000,
-  greetingTimeout: 15000,
-  socketTimeout: 15000,
-});
+// const transporter = nodemailer.createTransport({
+//   host: 'smtp-relay.brevo.com',
+//   port: 587,
+//   secure: false,
+//   family: 4,
+//   auth: {
+//     user: process.env.BREVO_USER,
+//     pass: process.env.BREVO_PASS,
+//   },
+//   connectionTimeout: 15000,
+//   greetingTimeout: 15000,
+//   socketTimeout: 15000,
+// });
 
 const registerUser = async (req, res) => {
   const { name, email, password } = req.body;
@@ -47,22 +47,59 @@ const registerUser = async (req, res) => {
 
     res.status(201).json({ message: 'Користувач зареєстрований. Лист відправлено.' });
 
-    // Відправляємо лист
-    const mailOptions = {
-      from: `"Hackathon Face" <ab893d001@smtp-brevo.com>`,
-      to: newUser.email,
-      subject: 'Підтвердження реєстрації в Hackathon Face',
-      html: `
-        <h2>Вітаємо, ${newUser.name}!</h2>
-        <p>Дякуємо за реєстрацію. Будь ласка, підтвердіть вашу електронну пошту, перейшовши за посиланням нижче:</p>
-        <a href="${verificationUrl}" style="padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">Підтвердити пошту</a>
-        <p>Якщо кнопка не працює, скопіюйте це посилання у браузер: <br/> ${verificationUrl}</p>
-      `
-    };
+    // // Відправляємо лист
+    // const mailOptions = {
+    //   from: `"Hackathon Face" <ab893d001@smtp-brevo.com>`,
+    //   to: newUser.email,
+    //   subject: 'Підтвердження реєстрації в Hackathon Face',
+    //   html: `
+    //     <h2>Вітаємо, ${newUser.name}!</h2>
+    //     <p>Дякуємо за реєстрацію. Будь ласка, підтвердіть вашу електронну пошту, перейшовши за посиланням нижче:</p>
+    //     <a href="${verificationUrl}" style="padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">Підтвердити пошту</a>
+    //     <p>Якщо кнопка не працює, скопіюйте це посилання у браузер: <br/> ${verificationUrl}</p>
+    //   `
+    // };
 
-    transporter.sendMail(mailOptions)
-      .then(() => console.log('Лист відправлено:', newUser.email))
-      .catch(err => console.error('Помилка листа:', err.message));
+    // transporter.sendMail(mailOptions)
+    //   .then(() => console.log('Лист відправлено:', newUser.email))
+    //   .catch(err => console.error('Помилка листа:', err.message));
+    const sendConfirmationEmail = async (newUser, verificationUrl) => {
+      try {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'api-key': process.env.BREVO_API_KEY 
+          },
+          body: JSON.stringify({
+            sender: { 
+              email: 'hackathonfaceoriginal@gmail.com', 
+              name: 'Hackathon Face' 
+            },
+            to: [
+              { email: newUser.email } 
+            ],
+            subject: 'Підтвердження реєстрації в Hackathon Face',
+            htmlContent: `
+              <h2>Вітаємо, ${newUser.name}!</h2>
+              <p>Дякуємо за реєстрацію. Будь ласка, підтвердіть вашу електронну пошту, перейшовши за посиланням нижче:</p>
+              <a href="${verificationUrl}" style="padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Підтвердити пошту</a>
+              <p style="margin-top: 20px; font-size: 12px; color: #666;">Якщо кнопка не працює, скопіюйте це посилання у браузер: <br/> ${verificationUrl}</p>
+            `
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Помилка від Brevo API:', errorData);
+        } else {
+          console.log('Лист успішно відправлено на:', newUser.email);
+        }
+      } catch (error) {
+        console.error('Помилка при відправці HTTP-запиту:', error.message);
+      }
+    };
 
   } catch (error) {
     console.error('Помилка реєстрації:', error);

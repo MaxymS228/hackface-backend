@@ -2,23 +2,23 @@ const Hackathon = require('../models/Hackathon');
 const HackathonMember = require('../models/HackathonMember');
 const Team = require('../models/Team');
 const User = require('../models/User');
-const nodemailer = require('nodemailer');
+//const nodemailer = require('nodemailer');
 const cloudinary = require('cloudinary').v2; 
 
-// Налаштовування transporter для відправки листів
-const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false,
-  family: 4,
-  auth: {
-    user: process.env.BREVO_USER,
-    pass: process.env.BREVO_PASS,
-  },
-  connectionTimeout: 15000,
-  greetingTimeout: 15000,
-  socketTimeout: 15000,
-});
+// // Налаштовування transporter для відправки листів
+// const transporter = nodemailer.createTransport({
+//   host: 'smtp-relay.brevo.com',
+//   port: 587,
+//   secure: false,
+//   family: 4,
+//   auth: {
+//     user: process.env.BREVO_USER,
+//     pass: process.env.BREVO_PASS,
+//   },
+//   connectionTimeout: 15000,
+//   greetingTimeout: 15000,
+//   socketTimeout: 15000,
+// });
 
 // Допоміжна функція для видалення файлу з Cloudinary
 const deleteOldImageFromCloudinary = async (imageUrl) => {
@@ -278,34 +278,80 @@ exports.joinHackathon = async (req, res) => {
       const startDate = new Date(hackathon.startDate).toLocaleDateString('uk-UA');
       const endDate = new Date(hackathon.endDate).toLocaleDateString('uk-UA');
 
-      const mailOptions = {
-        from: `"Hackathon Face" <ab893d001@smtp-brevo.com>`,
-        to: user.email,
-        subject: `Успішна реєстрація на хакатон: ${hackathon.title}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-            <h2 style="color: #4f46e5;">Вітаємо, ${user.name || 'учаснику'}! 🎉</h2>
-            <p>Дякуємо Вам, що приєдналися до нашого хакатону <strong>"${hackathon.title}"</strong>.</p>
-            <p>Ми раді бачити вас серед учасників. Це чудова можливість проявити свої навички, створити крутий проєкт та поборотися за призи!</p>
+      // const mailOptions = {
+      //   from: `"Hackathon Face" <ab893d001@smtp-brevo.com>`,
+      //   to: user.email,
+      //   subject: `Успішна реєстрація на хакатон: ${hackathon.title}`,
+      //   html: `
+      //     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+      //       <h2 style="color: #4f46e5;">Вітаємо, ${user.name || 'учаснику'}! 🎉</h2>
+      //       <p>Дякуємо Вам, що приєдналися до нашого хакатону <strong>"${hackathon.title}"</strong>.</p>
+      //       <p>Ми раді бачити вас серед учасників. Це чудова можливість проявити свої навички, створити крутий проєкт та поборотися за призи!</p>
             
-            <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
-              <p style="margin: 0 0 10px 0;"><strong>📅 Дати проведення:</strong> з ${startDate} по ${endDate}</p>
-              <p style="margin: 0 0 10px 0;"><strong>📍 Формат:</strong> ${hackathon.format === 'Online' ? 'Онлайн' : hackathon.location}</p>
-            </div>
+      //       <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
+      //         <p style="margin: 0 0 10px 0;"><strong>📅 Дати проведення:</strong> з ${startDate} по ${endDate}</p>
+      //         <p style="margin: 0 0 10px 0;"><strong>📍 Формат:</strong> ${hackathon.format === 'Online' ? 'Онлайн' : hackathon.location}</p>
+      //       </div>
 
-            <p>Ближче до початку ми надішлемо додаткову інформацію щодо формування команд та подальших кроків.</p>
-            <p>Бажаємо успіхів та натхнення!</p>
-            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-            <p style="color: #64748b; font-size: 14px;">З повагою,<br>Команда Hackathon Face</p>
-          </div>
-        `
-      };
+      //       <p>Ближче до початку ми надішлемо додаткову інформацію щодо формування команд та подальших кроків.</p>
+      //       <p>Бажаємо успіхів та натхнення!</p>
+      //       <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+      //       <p style="color: #64748b; font-size: 14px;">З повагою,<br>Команда Hackathon Face</p>
+      //     </div>
+      //   `
+      // };
 
+      // try {
+      //   await transporter.sendMail(mailOptions);
+      //   console.log(`Лист про реєстрацію відправлено на ${user.email}`);
+      // } catch (emailError) {
+      //   console.error('Помилка відправки листа, але користувача зареєстровано:', emailError);
+      // }
       try {
-        await transporter.sendMail(mailOptions);
-        console.log(`Лист про реєстрацію відправлено на ${user.email}`);
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'api-key': process.env.BREVO_API_KEY
+          },
+          body: JSON.stringify({
+            sender: { 
+              email: 'hackathonfaceoriginal@gmail.com', 
+              name: 'Hackathon Face' 
+            },
+            to: [
+              { email: user.email }
+            ],
+            subject: `Успішна реєстрація на хакатон: ${hackathon.title}`,
+            htmlContent: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+                <h2 style="color: #4f46e5;">Вітаємо, ${user.name || 'учаснику'}! 🎉</h2>
+                <p>Дякуємо Вам, що приєдналися до нашого хакатону <strong>"${hackathon.title}"</strong>.</p>
+                <p>Ми раді бачити вас серед учасників. Це чудова можливість проявити свої навички, створити крутий проєкт та поборотися за призи!</p>
+                
+                <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
+                  <p style="margin: 0 0 10px 0;"><strong>📅 Дати проведення:</strong> з ${startDate} по ${endDate}</p>
+                  <p style="margin: 0 0 10px 0;"><strong>📍 Формат:</strong> ${hackathon.format === 'Online' ? 'Онлайн' : hackathon.location}</p>
+                </div>
+
+                <p>Бажаємо успіхів та натхнення!</p>
+
+                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+                <p style="color: #64748b; font-size: 14px;">З повагою,<br>Команда Hackathon Face</p>
+              </div>
+            `
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Помилка від Brevo API (лист реєстрації):', errorData);
+        } else {
+          console.log(`Лист про реєстрацію відправлено на ${user.email}`);
+        }
       } catch (emailError) {
-        console.error('Помилка відправки листа, але користувача зареєстровано:', emailError);
+        console.error('Помилка виконання HTTP-запиту при відправці листа:', emailError.message);
       }
     }
 
@@ -410,20 +456,60 @@ exports.inviteToHackathon = async (req, res) => {
 
     const inviteUrl = `${process.env.FRONTEND_URL}/join-hackathon/${newMember._id}`;
 
-    await transporter.sendMail({
-      from: `"Hackathon Face" <ab893d001@smtp-brevo.com>`,
-      to: email,
-      subject: `Запрошення на хакатон "${hackathon.title}"`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
-          <h2 style="color: #4f46e5;">Вас запрошено!</h2>
-          <p>Привіт! <strong>${inviterName}</strong> запрошує вас приєднатися до хакатону <strong>"${hackathon.title}"</strong> на роль <strong>${role}</strong>.</p>
-          <p style="margin-bottom: 30px;">Це чудова можливість долучитися до крутого проєкту!</p>
-          <a href="${inviteUrl}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Переглянути запрошення</a>
-          <p style="margin-top: 30px; font-size: 12px; color: #64748b;">Якщо ви не очікували цього листа, просто ігноруйте його.</p>
-        </div>
-      `
-    });
+    // await transporter.sendMail({
+    //   from: `"Hackathon Face" <ab893d001@smtp-brevo.com>`,
+    //   to: email,
+    //   subject: `Запрошення на хакатон "${hackathon.title}"`,
+    //   html: `
+    //     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+    //       <h2 style="color: #4f46e5;">Вас запрошено!</h2>
+    //       <p>Привіт! <strong>${inviterName}</strong> запрошує вас приєднатися до хакатону <strong>"${hackathon.title}"</strong> на роль <strong>${role}</strong>.</p>
+    //       <p style="margin-bottom: 30px;">Це чудова можливість долучитися до крутого проєкту!</p>
+    //       <a href="${inviteUrl}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Переглянути запрошення</a>
+    //       <p style="margin-top: 30px; font-size: 12px; color: #64748b;">Якщо ви не очікували цього листа, просто ігноруйте його.</p>
+    //     </div>
+    //   `
+    // });
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'api-key': process.env.BREVO_API_KEY
+        },
+        body: JSON.stringify({
+          sender: { 
+            email: 'hackathonfaceoriginal@gmail.com', 
+            name: 'Hackathon Face' 
+          },
+          to: [
+            { email: email }
+          ],
+          subject: `Запрошення на хакатон "${hackathon.title}"`,
+          htmlContent: `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+              <h2 style="color: #4f46e5;">Вас запрошено!</h2>
+              <p>Привіт! <strong>${inviterName}</strong> запрошує вас приєднатися до хакатону <strong>"${hackathon.title}"</strong> на роль <strong>${role}</strong>.</p>
+              <p style="margin-bottom: 30px;">Це чудова можливість долучитися до крутого проєкту!</p>
+              
+              <a href="${inviteUrl}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Переглянути запрошення</a>
+
+              <p style="margin-top: 30px; font-size: 12px; color: #64748b;">Якщо ви не очікували цього листа, просто ігноруйте його.</p>
+            </div>
+          `
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Помилка від Brevo API (запрошення):', errorData);
+      } else {
+        console.log(`Запрошення успішно відправлено на ${email}`);
+      }
+    } catch (error) {
+      console.error('Помилка при відправці HTTP-запиту (запрошення):', error.message);
+    }
 
     res.status(200).json({ message: 'Запрошення надіслано' });
   } catch (error) {
