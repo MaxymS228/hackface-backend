@@ -4,29 +4,20 @@ const hackathonController = require('../controllers/hackathonController');
 const authMiddleware = require('../middleware/authMiddleware');
 const upload = require('../middleware/upload');
 
-// Створення хакатону (потрібна авторизація + завантаження 1 файлу 'banner')
+// Роут для створення хакатону (потрібна авторизація + завантаження 1 файлу 'banner')
 router.post('/', authMiddleware, upload.single('banner'), hackathonController.createHackathon);
 
 // Роут для отримання всіх хакатонів
 router.get('/', hackathonController.getAllHackathons);
 
-// Отримання хакатонів організатора
+// Роут для отримання хакатонів організатора
 router.get('/my-hackathons', authMiddleware, hackathonController.getMyHackathons);
+
+// Роут для отримання всіх активних інвайтів поточного користувача
+router.get('/my-invitations', authMiddleware, hackathonController.getMyInvitations);
 
 // Роут для отримання загальної кількості учасників на всіх хакатонах
 router.get('/stats', hackathonController.getTotalStats);
-
-// Отримання одного хакатону за ID (публічний доступ)
-router.get('/:id', hackathonController.getHackathonById);
-
-// Оновлення хакатону (потрібен ID хакатону в URL)
-router.put('/:id', authMiddleware, upload.single('banner'), hackathonController.updateHackathon);
-
-// Приєднання користувача до хакатону
-router.post('/:id/join', authMiddleware, hackathonController.joinHackathon);
-
-// Залишення та видалення користувача з хакатону
-router.delete('/:id/leave', authMiddleware, hackathonController.leaveHackathon);
 
 // Роут для отримання певного (особливого) запрошення на хакатон
 router.get('/members/:memberId/details', authMiddleware, hackathonController.getInviteDetails);
@@ -34,7 +25,25 @@ router.get('/members/:memberId/details', authMiddleware, hackathonController.get
 // Роут для прийняття/відхилення запрошення (користувачем)
 router.patch('/members/:memberId/respond', authMiddleware, hackathonController.respondToInvite);
 
-// Видалення учасника хакатону організатором
+// Роут для отримання одного хакатону за ID (публічний доступ)
+router.get('/:id', hackathonController.getHackathonById);
+
+// Роут для отримання логів відхилення
+router.get('/:id/invite-logs', authMiddleware, hackathonController.getInviteLogs);
+
+// Роут для видалення логів
+router.delete('/:id/invite-logs/:logId', authMiddleware, hackathonController.deleteInviteLog);
+
+// Роут для оновлення хакатону (потрібен ID хакатону в URL)
+router.put('/:id', authMiddleware, upload.single('banner'), hackathonController.updateHackathon);
+
+// Роут для приєднання користувача до хакатону
+router.post('/:id/join', authMiddleware, hackathonController.joinHackathon);
+
+// Роут для залишення та видалення користувача з хакатону
+router.delete('/:id/leave', authMiddleware, hackathonController.leaveHackathon);
+
+// Роут для видалення учасника хакатону організатором
 router.delete('/:id/participants/:memberId', authMiddleware, hackathonController.removeParticipant);
 
 // Роут для відправки запрошення (організатором)
@@ -55,13 +64,3 @@ router.get('/:id/my-role', authMiddleware, hackathonController.checkMyRole);
 
 
 module.exports = router;
-
-// const express = require('express');
-// const router = express.Router();
-// const { createHackathon } = require('../controllers/hackathonController');
-// const { getHackathonsByOrganizer } = require('../controllers/hackathonController');
-
-// router.post('/hackathons', createHackathon);
-// router.get('/hackathons', getHackathonsByOrganizer);
-
-// module.exports = router;

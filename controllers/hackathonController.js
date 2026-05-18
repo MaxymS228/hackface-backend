@@ -2,6 +2,7 @@ const Hackathon = require('../models/Hackathon');
 const HackathonMember = require('../models/HackathonMember');
 const Team = require('../models/Team');
 const TeamApplication = require('../models/TeamApplication');
+const InviteLog = require('../models/InviteLog');
 const User = require('../models/User');
 const cloudinary = require('cloudinary').v2; 
 
@@ -225,18 +226,18 @@ exports.getHackathonById = async (req, res) => {
     
     // Шукаємо хакатон (.lean() робить його звичайним JS об'єктом, щоб легко додати нові поля)
     const hackathon = await Hackathon.findById(id).lean();
-
     if (!hackathon) {
       return res.status(404).json({ message: 'Хакатон не знайдено' });
     }
 
     // Шукаємо всіх учасників
-    const teamMembers = await HackathonMember.find({
-      hackathonId: id
-    }).populate('userId', 'name email avatar specialization ');
+    const teamMembers = await HackathonMember.find({hackathonId: id})
+      .populate('userId', 'name email avatar specialization ');
 
     // Форматуємо дані під наш фронтенд дизайн
-    const members = teamMembers.map(member => ({
+    const members = teamMembers
+      .filter(member => member.userId != null)
+      .map(member => ({
       _id: member._id,
       role: member.role,
       joinedAt: member.joinDate,
@@ -247,7 +248,7 @@ exports.getHackathonById = async (req, res) => {
         name: member.userId.name,
         email: member.userId.email,
         avatar: member.userId.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.userId.name)}&background=6366f1&color=fff&size=128`
-      }
+      },
     }));
 
     // Відправляємо хакатон, прикріпивши до нього масив members
@@ -426,7 +427,7 @@ exports.removeParticipant = async (req, res) => {
 exports.inviteToHackathon = async (req, res) => {
   const { id } = req.params; // ID хакатону
   const { email, role } = req.body;
-  const inviterName = req.user.name; // Беремо ім'я того, хто запрошує (з мідлвари protect)
+  const inviterName = req.user.name; 
 
   try {
     const hackathon = await Hackathon.findById(id);
@@ -434,7 +435,6 @@ exports.inviteToHackathon = async (req, res) => {
 
     const user = await User.findOne({ email });
     
-    // Перевірка чи вже існує запис з таким email або userId
     const existingMember = await HackathonMember.findOne({
       hackathonId: id,
       $or: [
@@ -447,10 +447,24 @@ exports.inviteToHackathon = async (req, res) => {
       const statusMsg = {
         'Accepted': 'вже є членом команди цього хакатону',
         'Pending':  'вже має активне запрошення на цей хакатон',
-        'Rejected': 'вже відхилив запрошення на цей хакатон',
       };
       return res.status(400).json({ 
         message: `Користувач ${statusMsg[existingMember.status] || 'вже доданий до цього хакатону'}` 
+      });
+    }
+
+    const existingLog = await InviteLog.findOne({
+      hackathonId: id,
+      role: role,
+      $or: [
+        { email: email },
+        ...(user ? [{ userId: user._id }] : [])
+      ]
+    });
+
+    if (existingLog) {
+      return res.status(400).json({ 
+        message: `Користувач уже відхилив запрошення на цей хакатон на роль "${role}".` 
       });
     }
 
@@ -509,6 +523,7 @@ exports.inviteToHackathon = async (req, res) => {
 
     res.status(200).json({ message: 'Запрошення надіслано' });
   } catch (error) {
+    console.error('Помилка сервера при інвайті:', error);
     res.status(500).json({ message: 'Помилка сервера' });
   }
 };
@@ -516,20 +531,35 @@ exports.inviteToHackathon = async (req, res) => {
 // 9. Отримання даних про конкретне запрошення
 exports.getInviteDetails = async (req, res) => {
   try {
-    // Шукаємо мембера і "підтягуємо" дані хакатону (title)
     const invite = await HackathonMember.findById(req.params.memberId)
-      .populate('hackathonId', 'title') 
-      .populate('userId', 'name'); 
+      .populate('hackathonId', 'title'); 
 
-    if (!invite) return res.status(404).json({ message: 'Запрошення не знайдено' });
+    if (!invite) return res.status(404).json({ message: 'Запрошення не знайдено або вже недійсне' });
 
     res.status(200).json({
-      hackathonTitle: invite.hackathonId.title,
+      hackathonTitle: invite.hackathonId?.title || "Невідомий хакатон",
       role: invite.role,
-      inviter: invite.userId.name || "Організатор" 
+      inviter: invite.invitedBy || "Організатор" 
     });
   } catch (error) {
-    res.status(500).json({ message: 'Помилка отримання даних' });
+    console.error(error);
+    res.status(500).json({ message: 'Помилка отримання даних запрошення' });
+  }
+};
+// Отримання всіх запрошень до команд
+exports.getMyInvitations = async (req, res) => {
+  try {
+    const userEmail = req.user.email; 
+
+    const invitations = await HackathonMember.find({ 
+      email: userEmail, 
+      status: 'Pending' 
+    }).populate('hackathonId', 'title');
+
+    res.status(200).json(invitations);
+  } catch (error) {
+    console.error('Помилка отримання запрошень:', error);
+    res.status(500).json({ message: 'Помилка сервера при отриманні запрошень' });
   }
 };
 
@@ -542,8 +572,22 @@ exports.respondToInvite = async (req, res) => {
     const member = await HackathonMember.findById(memberId);
     if (!member) return res.status(404).json({ message: 'Запрошення не знайдено' });
 
+    if (status === 'Rejected') {
+      // Зберігаємо лог відхилення
+      await InviteLog.create({
+        hackathonId: member.hackathonId,
+        email: member.email,
+        role: member.role,
+        invitedBy: member.invitedBy,
+      });
+
+      // Видаляємо з бази
+      await HackathonMember.findByIdAndDelete(memberId);
+      return res.status(200).json({ message: 'Запрошення відхилено' });
+    }
+
+    // Якщо Accept оновлюємо
     member.status = status;
-    
     if (req.user && !member.userId) {
       member.userId = req.user._id;
     }
@@ -590,13 +634,18 @@ exports.removeMemberHackathon = async (req, res) => {
       return res.status(403).json({ message: 'Не можна видалити головного організатора' });
     }
 
+    // Ніхто не може видалити самого себе
+    if (target.userId?.toString() === req.userId) {
+      return res.status(403).json({ message: 'Ви не можете видалити самого себе' });
+    }
+
     // Тільки головний організатор може видаляти інших Organizer/Co-organizer
     if ((target.role === 'Organizer' || target.role === 'Co-organizer') && !isMainOrganizer) {
       return res.status(403).json({ message: 'Тільки головний організатор може видаляти організаторів' });
     }
 
     // Звичайний організатор може видаляти лише Jury/Mentor
-    if (!isMainOrganizer && requester.role !== 'Organizer') {
+    if (!isMainOrganizer && requester.role !== 'Organizer' && requester.role !== 'Co-organizer') {
       return res.status(403).json({ message: 'Недостатньо прав для видалення' });
     }
 
@@ -814,6 +863,77 @@ exports.getTotalStats = async (req, res) => {
       totalParticipants: uniqueParticipants.length,
     });
   } catch (error) {
+    res.status(500).json({ message: 'Помилка сервера' });
+  }
+};
+
+// 17. Отримання логів відхилення
+exports.getInviteLogs = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+ 
+    const hackathon = await Hackathon.findById(id);
+    if (!hackathon) {
+      return res.status(404).json({ message: 'Хакатон не знайдено' });
+    }
+ 
+    const isMainOrganizer = hackathon.organizerId.toString() === userId;
+ 
+    // Якщо не головний — перевіряємо чи Co-organizer
+    if (!isMainOrganizer) {
+      const coOrg = await HackathonMember.findOne({
+        hackathonId: id,
+        userId: userId,
+        role: 'Co-organizer',
+        status: 'Accepted',
+      });
+      if (!coOrg) {
+        return res.status(403).json({ message: 'Доступ заборонено. Тільки організатори мають доступ до логів.' });
+      }
+    }
+ 
+    const logs = await InviteLog.find({ hackathonId: id }).sort({ rejectedAt: -1 });
+    res.status(200).json(logs);
+  } catch (error) {
+    console.error('Помилка при отриманні логів відхилень:', error);
+    res.status(500).json({ message: 'Помилка сервера' });
+  }
+};
+
+// 18. Видалення логів відхилення
+exports.deleteInviteLog = async (req, res) => {
+  try {
+    const { id, logId } = req.params;
+    const userId = req.userId;
+ 
+    const hackathon = await Hackathon.findById(id);
+    if (!hackathon) {
+      return res.status(404).json({ message: 'Хакатон не знайдено' });
+    }
+ 
+    const isMainOrganizer = hackathon.organizerId.toString() === userId;
+ 
+    if (!isMainOrganizer) {
+      const coOrg = await HackathonMember.findOne({
+        hackathonId: id,
+        userId: userId,
+        role: 'Co-organizer',
+        status: 'Accepted',
+      });
+      if (!coOrg) {
+        return res.status(403).json({ message: 'Недостатньо прав для видалення логу' });
+      }
+    }
+ 
+    const log = await InviteLog.findOneAndDelete({ _id: logId, hackathonId: id });
+    if (!log) {
+      return res.status(404).json({ message: 'Лог не знайдено' });
+    }
+ 
+    res.status(200).json({ message: 'Лог успішно видалено' });
+  } catch (error) {
+    console.error('Помилка при видаленні логу:', error);
     res.status(500).json({ message: 'Помилка сервера' });
   }
 };
