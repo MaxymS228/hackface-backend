@@ -12,10 +12,16 @@ router.get('/hackathon/:hackathonId', authMiddleware, teamController.getHackatho
 router.get('/hackathon/:hackathonId/looking', authMiddleware, teamController.getTeamsLookingForMembers);
 // Роут для отримання всіх команд де присутній користувач
 router.get('/my/teams', authMiddleware, teamController.getMyTeams);
+// Роут для отримання статистики команд для організатора
+router.get('/hackathon/:hackathonId/stats', authMiddleware, teamController.getTeamsStats);
 // Роут для отримання даних/деталів команди
 router.get('/:teamId', authMiddleware, teamController.getTeamDetails);
 // Роут для оновлення даних команди
 router.patch('/:teamId', authMiddleware, teamController.updateTeam);
+// Роут для видалення команди (організатором)
+router.delete('/:teamId', authMiddleware, teamController.deleteTeam);
+// Роут для ручного додавання учасника (організатором)
+router.post('/:teamId/add-member', authMiddleware, teamController.addMemberByOrganizer);
 
 // <Заявки>
 // Роут для подачі заявки в команду

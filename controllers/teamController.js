@@ -380,18 +380,6 @@ exports.autoMatchmaking = async (req, res) => {
     while (remaining.length > 0) {
       // Edge case: якщо залишилось менше ніж minTeamSize
       let groupSize = targetSize;
-      // if (remaining.length < minTeamSize) {
-      //   // Розкидуємо по вже створених командах
-      //   for (const solo of remaining) {
-      //     const teamToFill = await Team.findOne({ hackathonId, isOpen: true });
-      //     if (teamToFill) {
-      //       solo.teamId = teamToFill._id;
-      //       solo.teamRole = 'Member';
-      //       await solo.save();
-      //     }
-      //   }
-      //   break;
-      // }
       if (remaining.length < minTeamSize) {
         // Отримуємо актуальні відкриті команди
         const availableTeams = await Team.find({ hackathonId, isOpen: true });
@@ -470,11 +458,16 @@ exports.autoMatchmaking = async (req, res) => {
 exports.lockAllTeams = async (req, res) => {
   try {
     const { hackathonId } = req.params;
+    const { unlock } = req.body;
     const userId = req.userId;
 
     const hackathon = await Hackathon.findById(hackathonId);
     if (hackathon.organizerId.toString() !== userId) {
       return res.status(403).json({ message: 'Тільки організатор може блокувати команди' });
+    }
+    if (unlock) {
+      await Team.updateMany({ hackathonId }, { lockedAt: null, isOpen: true });
+      return res.status(200).json({ message: 'Всі команди розблоковано' });
     }
 
     const lockTime = new Date();
@@ -573,6 +566,151 @@ exports.getMyTeams = async (req, res) => {
     res.status(200).json(teams.filter(Boolean));
   } catch (error) {
     console.error('Помилка отримання команд:', error);
+    res.status(500).json({ message: 'Помилка сервера' });
+  }
+};
+
+// 12. Статистика команд для організатора
+exports.getTeamsStats = async (req, res) => {
+  try {
+    const { hackathonId } = req.params;
+
+    const hackathon = await Hackathon.findById(hackathonId);
+    if (!hackathon) return res.status(404).json({ message: 'Хакатон не знайдено' });
+
+    // Всього команд
+    const totalTeams = await Team.countDocuments({ hackathonId });
+
+    // Всі команди з учасниками
+    const teams = await Team.find({ hackathonId })
+      .populate('captainId', 'name avatar')
+      .lean();
+
+    const teamsWithMembers = await Promise.all(
+      teams.map(async (team) => {
+        const members = await HackathonMember.find({
+          teamId: team._id, status: 'Accepted'
+        }).populate('userId', 'name email avatar');
+
+        return {
+          ...team,
+          members: members.map(m => ({
+            _id: m._id,
+            teamRole: m.teamRole,
+            primaryRole: m.primaryRole,
+            user: m.userId
+          })),
+          membersCount: members.length
+        };
+      })
+    );
+
+    // Учасників у командах
+    const membersInTeams = await HackathonMember.countDocuments({
+      hackathonId,
+      role: 'Participant',
+      status: 'Accepted',
+      teamId: { $ne: null }
+    });
+
+    // Учасників без команди
+    const soloMembers = await HackathonMember.find({
+      hackathonId,
+      role: 'Participant',
+      status: 'Accepted',
+      teamId: null
+    }).populate('userId', 'name email avatar');
+
+    // Чи заблоковані команди
+    const lockedTeam = await Team.findOne({ hackathonId, lockedAt: { $ne: null } });
+    const isLocked = !!lockedTeam;
+
+    res.status(200).json({
+      totalTeams,
+      membersInTeams,
+      soloMembersCount: soloMembers.length,
+      soloMembers: soloMembers.map(m => ({
+        _id: m._id,
+        user: m.userId,
+        primaryRole: m.primaryRole,
+      })),
+      teams: teamsWithMembers,
+      isLocked,
+      hackathon: {
+        minTeamSize: hackathon.minTeamSize,
+        maxTeamSize: hackathon.maxTeamSize,
+      }
+    });
+  } catch (error) {
+    console.error('Помилка отримання статистики:', error);
+    res.status(500).json({ message: 'Помилка сервера' });
+  }
+};
+
+// 13. Видалення команди організатором
+exports.deleteTeam = async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const userId = req.userId;
+
+    const team = await Team.findById(teamId);
+    if (!team) return res.status(404).json({ message: 'Команду не знайдено' });
+
+    const hackathon = await Hackathon.findById(team.hackathonId);
+    if (hackathon.organizerId.toString() !== userId) {
+      return res.status(403).json({ message: 'Тільки організатор може видаляти команди' });
+    }
+
+    // Звільняємо всіх учасників
+    await HackathonMember.updateMany(
+      { teamId },
+      { $set: { teamId: null, teamRole: null } }
+    );
+
+    await TeamApplication.deleteMany({ teamId });
+    await Team.findByIdAndDelete(teamId);
+
+    res.status(200).json({ message: 'Команду видалено' });
+  } catch (error) {
+    res.status(500).json({ message: 'Помилка сервера' });
+  }
+};
+
+// 14. Ручне додавання учасника організатором
+exports.addMemberByOrganizer = async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const { memberId } = req.body;
+    const userId = req.userId;
+
+    const team = await Team.findById(teamId);
+    if (!team) return res.status(404).json({ message: 'Команду не знайдено' });
+
+    const hackathon = await Hackathon.findById(team.hackathonId);
+    if (hackathon.organizerId.toString() !== userId) {
+      return res.status(403).json({ message: 'Тільки організатор може додавати учасників' });
+    }
+
+    const membersCount = await HackathonMember.countDocuments({ teamId, status: 'Accepted' });
+    if (membersCount >= hackathon.maxTeamSize) {
+      return res.status(400).json({ message: 'Команда вже заповнена' });
+    }
+
+    const member = await HackathonMember.findById(memberId);
+    if (!member) return res.status(404).json({ message: 'Учасника не знайдено' });
+    if (member.teamId) return res.status(400).json({ message: 'Учасник вже в команді' });
+
+    member.teamId = teamId;
+    member.teamRole = 'Member';
+    await member.save();
+
+    if (membersCount + 1 >= hackathon.maxTeamSize) {
+      team.isOpen = false;
+      await team.save();
+    }
+
+    res.status(200).json({ message: 'Учасника додано до команди' });
+  } catch (error) {
     res.status(500).json({ message: 'Помилка сервера' });
   }
 };
