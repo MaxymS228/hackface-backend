@@ -4,6 +4,10 @@ const cloudinary = require('cloudinary').v2;
 //const path = require('path');
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
+const HackathonMember = require('../models/HackathonMember');
+const TaskScore = require('../models/TaskScore');
+const Team = require('../models/Team');
+const Project = require('../models/Project');
 
 // Допоміжна функція для видалення файлів з Cloudinary
 const deleteOldImageFromCloudinary = async (imageUrl) => {
@@ -179,5 +183,89 @@ exports.changePassword = async (req, res) => {
   } catch (error) {
     console.error('Помилка changePassword:', error);
     res.status(500).json({ message: 'Помилка сервера при зміні пароля' });
+  }
+};
+
+// 5. Отрмання статистики профілю
+exports.getUserStats = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Всі участі у хакатонах
+    const memberships = await HackathonMember.find({
+      userId: id, role: 'Participant', status: 'Accepted'
+    }).populate('hackathonId', 'title startDate endDate');
+
+    const hackathonIds = memberships.map(m => m.hackathonId?._id).filter(Boolean);
+
+    // Команди де юзер є учасником
+    const teamMemberships = await HackathonMember.find({
+      userId: id, teamId: { $ne: null }, status: 'Accepted'
+    }).populate('teamId');
+
+    const teamIds = teamMemberships.map(m => m.teamId?._id).filter(Boolean);
+
+    // Рахуємо місця — для кожного завершеного хакатону
+    let place1 = 0, place2 = 0, place3 = 0;
+    const completedHackathons = [];
+
+    for (const membership of memberships) {
+      const hack = membership.hackathonId;
+      if (!hack || new Date() < new Date(hack.endDate)) continue;
+
+      const res2 = await fetch(`${process.env.FRONTEND_URL || 'http://localhost:5000'}/api/tasks/hackathon/${hack._id}/results`).catch(() => null);
+
+      const Task = require('../models/Task');
+      const tasks = await Task.find({ hackathonId: hack._id, isVisible: true });
+      const allScores = await TaskScore.find({ hackathonId: hack._id });
+      const teams = await Team.find({ hackathonId: hack._id });
+
+      const tableData = teams.map(team => {
+        const total = tasks.reduce((sum, task) => {
+          const scores = allScores.filter(
+            s => s.taskId.toString() === task._id.toString() &&
+                 s.teamId.toString() === team._id.toString()
+          );
+          if (scores.length === 0) return sum;
+          const avg = scores.reduce((s2, sc) => s2 + sc.totalScore, 0) / scores.length;
+          return sum + avg;
+        }, 0);
+        return { teamId: team._id.toString(), total: Math.round(total * 10) / 10 };
+      }).sort((a, b) => b.total - a.total);
+
+      // Шукаємо чи є юзер в якійсь команді цього хакатону
+      const userTeam = teamMemberships.find(tm =>
+        tm.hackathonId?.toString() === hack._id.toString() ||
+        teams.some(t => t._id.toString() === tm.teamId?._id?.toString() && t.hackathonId.toString() === hack._id.toString())
+      );
+
+      if (userTeam?.teamId) {
+        const rank = tableData.findIndex(t => t.teamId === userTeam.teamId._id?.toString()) + 1;
+        if (rank === 1) place1++;
+        else if (rank === 2) place2++;
+        else if (rank === 3) place3++;
+      }
+
+      completedHackathons.push({
+        _id: hack._id,
+        title: hack.title,
+        startDate: hack.startDate,
+        endDate: hack.endDate,
+      });
+    }
+
+    // Проєкти команд юзера
+    const projects = await Project.find({ teamId: { $in: teamIds } })
+      .populate('teamId', 'name hackathonId');
+
+    res.status(200).json({
+      totalHackathons: memberships.length,
+      completedHackathons,
+      podium: { place1, place2, place3, total: place1 + place2 + place3 },
+      projects,
+    });
+  } catch (error) {
+    console.error('Помилка stats:', error);
+    res.status(500).json({ message: 'Помилка сервера' });
   }
 };

@@ -22,6 +22,14 @@ router.patch('/:teamId', authMiddleware, teamController.updateTeam);
 router.delete('/:teamId', authMiddleware, teamController.deleteTeam);
 // Роут для ручного додавання учасника (організатором)
 router.post('/:teamId/add-member', authMiddleware, teamController.addMemberByOrganizer);
+// Роут для покидання команди
+router.delete('/:teamId/leave', authMiddleware, teamController.leaveTeam);
+
+// Ресурси команди
+// Роут для додавання ресурсу до команди 
+router.post('/:teamId/resources', authMiddleware, teamController.addResource);
+// Роут для видалення ресурсу з команди
+router.delete('/:teamId/resources/:resourceId', authMiddleware, teamController.removeResource);
 
 // <Заявки>
 // Роут для подачі заявки в команду
@@ -30,7 +38,7 @@ router.post('/:teamId/apply', authMiddleware, teamController.applyToTeam);
 router.patch('/applications/:applicationId', authMiddleware, teamController.handleApplication);
 
 // <Керування командою>
-// Роут для видалення учасника з команди капітаном
+// Роут для видалення учасника з команди капітаном/організаторами
 router.delete('/:teamId/members/:memberId', authMiddleware, teamController.removeMemberFromTeam);
 
 // <Організатор>

@@ -167,10 +167,7 @@ exports.getMyHackathons = async (req, res) => {
 exports.updateHackathon = async (req, res) => {
   try {
     const { id } = req.params; // ID хакатону з URL
-    const { 
-      title, description, startDate, endDate, registrationDeadline,
-      format, location, themes, prizes, status 
-    } = req.body;
+    const { title, description, startDate, endDate, registrationDeadline, format, location, themes, prizes, status, minTeamSize, maxTeamSize } = req.body;
 
     // Шукаємо хакатон
     const hackathon = await Hackathon.findById(id);
@@ -194,6 +191,8 @@ exports.updateHackathon = async (req, res) => {
     if (hackathon.format === 'Online') { hackathon.location = ''; } else if (location !== undefined) { hackathon.location = location; }
     if (prizes !== undefined) hackathon.prizes = prizes;
     if (status) hackathon.status = status;
+    if (minTeamSize !== undefined) hackathon.minTeamSize = Number(minTeamSize);
+    if (maxTeamSize !== undefined) hackathon.maxTeamSize = Number(maxTeamSize);
 
     if (themes !== undefined) {
       if (typeof themes === 'string') {

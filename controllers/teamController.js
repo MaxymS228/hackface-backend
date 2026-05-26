@@ -4,6 +4,26 @@ const Hackathon = require('../models/Hackathon');
 const User = require('../models/User');
 const TeamApplication = require('../models/TeamApplication')
 
+const isOrganizerOrCoOrganizer = async (hackathonId, userId) => {
+  const hackathon = await Hackathon.findById(hackathonId);
+  if (!hackathon) return { allowed: false, isMain: false };
+
+  // Головний організатор
+  if (hackathon.organizerId.toString() === userId) {
+    return { allowed: true, isMain: true, hackathon };
+  }
+
+  // Со-організатор
+  const coOrg = await HackathonMember.findOne({
+    hackathonId,
+    userId,
+    role: 'Co-organizer',
+    status: 'Accepted'
+  });
+
+  return { allowed: !!coOrg, isMain: false, hackathon };
+};
+
 // 1. Створення команди
 exports.createTeam = async (req, res) => {
   try {
@@ -280,7 +300,7 @@ exports.getHackathonTeams = async (req, res) => {
   }
 };
 
-// 7. Видалити учасника з команди (Капітан)
+// 7. Видалити учасника з команди (Капітан/Організатори)
 exports.removeMemberFromTeam = async (req, res) => {
   try {
     const { teamId, memberId } = req.params;
@@ -288,9 +308,19 @@ exports.removeMemberFromTeam = async (req, res) => {
 
     const team = await Team.findById(teamId);
     if (!team) return res.status(404).json({ message: 'Команду не знайдено' });
-    if (team.captainId.toString() !== userId) {
-      return res.status(403).json({ message: 'Тільки капітан може видаляти учасників' });
+
+    const hackathonId = team.hackathonId
+    if (!hackathonId) { return res.status(400).json({ message: 'Не вдалося визначити ID хакатону для цієї команди' }); }
+
+    const { allowed } = await isOrganizerOrCoOrganizer(hackathonId, userId);
+    const isCaptain = team.captainId.toString() === userId;
+    if (!allowed && !isCaptain) {
+      return res.status(403).json({ message: 'Недостатньо прав для видалення учасника з команди' });
     }
+
+    // if (team.captainId.toString() !== userId) {
+    //   return res.status(403).json({ message: 'Тільки капітан може видаляти учасників' });
+    // }
 
     // Блокування за годину до старту
     if (team.lockedAt && new Date() >= team.lockedAt) {
@@ -321,16 +351,17 @@ exports.removeMemberFromTeam = async (req, res) => {
   }
 };
 
-// 8. Авторозподіл учасників (Організатор)
+// 8. Авторозподіл учасників (Організатор та co-організатор)
 exports.autoMatchmaking = async (req, res) => {
   try {
     const { hackathonId } = req.params;
     const userId = req.userId;
 
     const hackathon = await Hackathon.findById(hackathonId);
+    const { allowed } = await isOrganizerOrCoOrganizer(hackathonId, userId);
     if (!hackathon) return res.status(404).json({ message: 'Хакатон не знайдено' });
-    if (hackathon.organizerId.toString() !== userId) {
-      return res.status(403).json({ message: 'Тільки організатор може запустити авторозподіл' });
+    if (!allowed) {
+      return res.status(403).json({ message: 'Недостатньо прав. Тільки організатори можуть запустити авторозподіл' });
     }
 
     const { minTeamSize, maxTeamSize } = hackathon;
@@ -462,9 +493,13 @@ exports.lockAllTeams = async (req, res) => {
     const userId = req.userId;
 
     const hackathon = await Hackathon.findById(hackathonId);
-    if (hackathon.organizerId.toString() !== userId) {
-      return res.status(403).json({ message: 'Тільки організатор може блокувати команди' });
+    const { allowed } = await isOrganizerOrCoOrganizer(hackathonId, userId);
+    if (!allowed) {
+      return res.status(403).json({ message: 'Недостатньо прав. Тільки організатори можуть блокувати команди' });
     }
+    // if (hackathon.organizerId.toString() !== userId) {
+    //   return res.status(403).json({ message: 'Тільки організатор може блокувати команди' });
+    // }
     if (unlock) {
       await Team.updateMany({ hackathonId }, { lockedAt: null, isOpen: true });
       return res.status(200).json({ message: 'Всі команди розблоковано' });
@@ -574,9 +609,13 @@ exports.getMyTeams = async (req, res) => {
 exports.getTeamsStats = async (req, res) => {
   try {
     const { hackathonId } = req.params;
-
     const hackathon = await Hackathon.findById(hackathonId);
     if (!hackathon) return res.status(404).json({ message: 'Хакатон не знайдено' });
+    const userId = req.userId;
+    const { allowed } = await isOrganizerOrCoOrganizer(hackathonId, userId);
+    if (!allowed) {
+      return res.status(403).json({ message: 'Недостатньо прав. Тільки організатори можуть отримати статистику' });
+    }
 
     // Всього команд
     const totalTeams = await Team.countDocuments({ hackathonId });
@@ -657,8 +696,12 @@ exports.deleteTeam = async (req, res) => {
     if (!team) return res.status(404).json({ message: 'Команду не знайдено' });
 
     const hackathon = await Hackathon.findById(team.hackathonId);
-    if (hackathon.organizerId.toString() !== userId) {
-      return res.status(403).json({ message: 'Тільки організатор може видаляти команди' });
+    // if (hackathon.organizerId.toString() !== userId) {
+    //   return res.status(403).json({ message: 'Тільки організатор може видаляти команди' });
+    // }
+    const { allowed } = await isOrganizerOrCoOrganizer(hackathonId, userId);
+    if (!allowed) {
+      return res.status(403).json({ message: 'Недостатньо прав. Тільки організатори можуть видаляти команди' });
     }
 
     // Звільняємо всіх учасників
@@ -687,8 +730,12 @@ exports.addMemberByOrganizer = async (req, res) => {
     if (!team) return res.status(404).json({ message: 'Команду не знайдено' });
 
     const hackathon = await Hackathon.findById(team.hackathonId);
-    if (hackathon.organizerId.toString() !== userId) {
-      return res.status(403).json({ message: 'Тільки організатор може додавати учасників' });
+    // if (hackathon.organizerId.toString() !== userId) {
+    //   return res.status(403).json({ message: 'Тільки організатор може додавати учасників' });
+    // }
+    const { allowed } = await isOrganizerOrCoOrganizer(hackathonId, userId);
+    if (!allowed) {
+      return res.status(403).json({ message: 'Недостатньо прав. Тільки організатори можуть додавати учасників' });
     }
 
     const membersCount = await HackathonMember.countDocuments({ teamId, status: 'Accepted' });
@@ -710,6 +757,119 @@ exports.addMemberByOrganizer = async (req, res) => {
     }
 
     res.status(200).json({ message: 'Учасника додано до команди' });
+  } catch (error) {
+    res.status(500).json({ message: 'Помилка сервера' });
+  }
+};
+
+// 15. Покинути команду
+exports.leaveTeam = async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const userId = req.userId;
+
+    const team = await Team.findById(teamId);
+    if (!team) return res.status(404).json({ message: 'Команду не знайдено' });
+
+    // Блокування
+    if (team.lockedAt && new Date() >= team.lockedAt) {
+      return res.status(403).json({ message: 'Команда заблокована — не можна покинути' });
+    }
+
+    const member = await HackathonMember.findOne({
+      teamId, userId, status: 'Accepted'
+    });
+
+    if (!member) return res.status(404).json({ message: 'Ти не є учасником цієї команди' });
+
+    // Капітан не може просто покинути — має видалити команду
+    if (member.teamRole === 'Captain') {
+      return res.status(400).json({ message: 'Капітан не може покинути команду. Видаліть команду або передайте роль.' });
+    }
+
+    member.teamId = null;
+    member.teamRole = null;
+    await member.save();
+
+    if (!team.isOpen) {
+      team.isOpen = true;
+      await team.save();
+    }
+
+    res.status(200).json({ message: 'Ти покинув команду' });
+  } catch (error) {
+    res.status(500).json({ message: 'Помилка сервера' });
+  }
+};
+
+// 16. Додати ресурс до команди
+exports.addResource = async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const { title, url } = req.body;
+    const userId = req.userId;
+
+    if (!title?.trim() || !url?.trim()) {
+      return res.status(400).json({ message: 'Назва і посилання обов\'язкові' });
+    }
+
+    // Перевірка URL
+    try { new URL(url); } catch {
+      return res.status(400).json({ message: 'Невірний формат посилання' });
+    }
+
+    const team = await Team.findById(teamId);
+    if (!team) return res.status(404).json({ message: 'Команду не знайдено' });
+
+    // Перевірка чи є учасником команди
+    const member = await HackathonMember.findOne({
+      teamId, userId, status: 'Accepted'
+    });
+    if (!member) return res.status(403).json({ message: 'Ти не є учасником цієї команди' });
+
+    const user = await User.findById(userId).select('name');
+
+    team.resources.push({
+      title: title.trim(),
+      url: url.trim(),
+      addedBy: userId,
+      addedByName: user?.name || 'Учасник'
+    });
+    await team.save();
+
+    res.status(201).json({
+      message: 'Ресурс додано',
+      resource: team.resources[team.resources.length - 1]
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Помилка сервера' });
+  }
+};
+
+// 17. Видалити ресурс
+exports.removeResource = async (req, res) => {
+  try {
+    const { teamId, resourceId } = req.params;
+    const userId = req.userId;
+
+    const team = await Team.findById(teamId);
+    if (!team) return res.status(404).json({ message: 'Команду не знайдено' });
+
+    const resource = team.resources.id(resourceId);
+    if (!resource) return res.status(404).json({ message: 'Ресурс не знайдено' });
+
+    // Видаляти може той хто додав або капітан
+    const isOwner = resource.addedBy?.toString() === userId;
+    const isCaptain = team.captainId.toString() === userId;
+
+    if (!isOwner && !isCaptain) {
+      return res.status(403).json({ message: 'Недостатньо прав для видалення' });
+    }
+
+    team.resources.pull(resourceId);
+    await team.save();
+
+    res.status(200).json({ message: 'Ресурс видалено' });
   } catch (error) {
     res.status(500).json({ message: 'Помилка сервера' });
   }

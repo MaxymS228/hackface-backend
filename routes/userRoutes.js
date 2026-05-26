@@ -8,8 +8,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 // --- ПРИВАТНІ МАРШРУТИ (Тільки для авторизованих, використовуємо authMiddleware) ---
 
-// Отримати свої дані (GET /api/users/me)
-//router.get('/me', verifyToken, userController.getCurrentUser);
+// Отримати свої дані 
 router.get('/me', authMiddleware, userController.getCurrentUser);
 
 // Оновлення дані (PUT /api/users/me)
@@ -21,9 +20,10 @@ router.put('/me', authMiddleware, upload.fields([
 // Зміна паролю
 router.put('/change-password', authMiddleware, userController.changePassword);
 
-// --- ПУБЛІЧНІ МАРШРУТИ (Доступні всім) ---
-
-// Отримати публічний профіль за ID (GET /api/users/:id)
+// Роут для отримання публічного профілю за ID (GET /api/users/:id)
 router.get('/:id', userController.getPublicProfile);
+
+// Роут для отримання статистики профілю
+router.get('/:id/stats', userController.getUserStats);
 
 module.exports = router;
