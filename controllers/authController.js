@@ -45,23 +45,6 @@ const registerUser = async (req, res) => {
     // Створюємо посилання для підтвердження (яке веде на фронтенд)
     const verificationUrl = `${process.env.FRONTEND_URL}/verify/${verificationToken}`;
 
-
-    // // Відправляємо лист
-    // const mailOptions = {
-    //   from: `"Hackathon Face" <ab893d001@smtp-brevo.com>`,
-    //   to: newUser.email,
-    //   subject: 'Підтвердження реєстрації в Hackathon Face',
-    //   html: `
-    //     <h2>Вітаємо, ${newUser.name}!</h2>
-    //     <p>Дякуємо за реєстрацію. Будь ласка, підтвердіть вашу електронну пошту, перейшовши за посиланням нижче:</p>
-    //     <a href="${verificationUrl}" style="padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">Підтвердити пошту</a>
-    //     <p>Якщо кнопка не працює, скопіюйте це посилання у браузер: <br/> ${verificationUrl}</p>
-    //   `
-    // };
-
-    // transporter.sendMail(mailOptions)
-    //   .then(() => console.log('Лист відправлено:', newUser.email))
-    //   .catch(err => console.error('Помилка листа:', err.message));
     const sendConfirmationEmail = async (newUser, verificationUrl) => {
       try {
         const response = await fetch('https://api.brevo.com/v3/smtp/email', {
